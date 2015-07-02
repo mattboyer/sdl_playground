@@ -16,7 +16,7 @@ struct rgb {
 	unsigned int b;
 };
 
-static struct rgb palette[600];
+static struct rgb palette[2 * SIN_INDICES];
 
 void prepare_sin() {
 	int i;
@@ -98,8 +98,6 @@ int main() {
 
 	SDL_Init(SDL_INIT_VIDEO);
 
-	//SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Foo", "Oh no!!!", window);
-
 	SDL_CreateWindowAndRenderer(
 		400, // width, in pixels
 		400, // height, in pixels
@@ -156,13 +154,9 @@ int main() {
 			t3 = p3;
 			t4 = p4;
 
-			/*
-			t1 = t1 % 256;
-			t2 = t2 % 256;
-			*/
-
-			/* THE VALUES WE READ FROM SIN_array MAY BE NEGATIVE!!!
+			/* THE VALUES WE READ FROM sin_array MAY BE NEGATIVE!!!
 			 * Ergo, -256 < z < 256
+			 * The palette must cover the range from -256 to 256
 			 */
 
 			/* Also, the sin indices t1..t4 may have positive or negative values. sin(-a) = -sin(a) */
@@ -205,6 +199,9 @@ int main() {
 		p3 += sp3;
 		p4 -= sp4;
 
+		SDL_PumpEvents();
+		if (SDL_QuitRequested())
+			break;
 	}
 
 	SDL_DestroyWindow(window);
