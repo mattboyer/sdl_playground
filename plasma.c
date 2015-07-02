@@ -4,21 +4,52 @@
 
 #include "SDL.h"
 
-static int sin_array[256];
+#define SIN_INDICES 256
+
+#define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
+
+static int sin_array[SIN_INDICES];
+
+struct rgb {
+	unsigned int r;
+	unsigned int g;
+	unsigned int b;
+};
+
+static struct rgb palette[600];
 
 void prepare_sin() {
-		int i;
-		for (i=0; i < 256; ++i) {
-				sin_array[i] = (int) 64 * sin(2 * M_PI * i / 256);
-				//printf("i=%d -> sin=%d\n", i, sin_array[i]);
-		}
+	int i;
+	for (i=0; i < SIN_INDICES; ++i) {
+		sin_array[i] = (int) 64 * sin(2 * M_PI * i / SIN_INDICES);
+	}
+};
+
+void prepare_palette() {
+	int palette_idx;
+
+	// Colours for negative indices are shades of red
+	for (palette_idx = -256; palette_idx < 0; ++palette_idx) {
+		palette[palette_idx + 256].r = -palette_idx;
+		palette[palette_idx + 256].g = 0;
+		palette[palette_idx + 256].b = 0;
+	}
+
+	// Colours for positive indices are shades of green
+	for (palette_idx = 0; palette_idx < 256; ++palette_idx) {
+		palette[palette_idx + 256].r = 0;
+		palette[palette_idx + 256].g = palette_idx;
+		palette[palette_idx + 256].b = 0;
+	}
 };
 
 int main() {
 	prepare_sin();
+	prepare_palette();
+
 	/*
 	 * A window is just a window, with height, width, a title and a
-	 * position on the screen (to be managed by the WM).
+	 * position on the screen (to be managed by the Window Manager).
 	 */
 	SDL_Window *window;
 
@@ -94,11 +125,10 @@ int main() {
 	if (render_target = SDL_GetRenderTarget(renderer)) {
 		t_w = t_h = 0;
 		SDL_QueryTexture(render_target, NULL, NULL, &t_w, &t_h);
-		printf("%d x %d\n", t_w, t_h);
+		printf("Texture %d x %d\n", t_w, t_h);
 	}
 
 	int row, row_offset;
-
 
 	// These are incremented for every frame by their respective sp*
 	// increments
@@ -118,23 +148,45 @@ int main() {
 	// TODO WTF?
 	int z0, z;
 
-	//while (true) {
+	while (true) {
+
 		t1 = p1;
 		t2 = p2;
 		for (row = 0; row < t_h; ++row) {
 			t3 = p3;
 			t4 = p4;
 
+			/*
 			t1 = t1 % 256;
 			t2 = t2 % 256;
-			z0 = sin_array[t1] + sin_array[t2];
+			*/
+
+			/* THE VALUES WE READ FROM SIN_array MAY BE NEGATIVE!!!
+			 * Ergo, -256 < z < 256
+			 */
+
+			/* Also, the sin indices t1..t4 may have positive or negative values. sin(-a) = -sin(a) */
+			t1 %= SIN_INDICES;
+			t2 %= SIN_INDICES;
+			z0 = SIN(t1) + SIN(t2);
 			for(row_offset = 0; row_offset < t_w; ++row_offset) {
+				/*
 				t3 = t3 % 256;
 				t4 = t4 % 256;
+				*/
 
-				z = z0 + sin_array[t3] + sin_array[t4];
-				z = (unsigned char) z;
-				SDL_SetRenderDrawColor(renderer, z, z, z, SDL_ALPHA_OPAQUE);
+			t3 %= SIN_INDICES;
+			t4 %= SIN_INDICES;
+				z = z0 + SIN(t3) + SIN(t4);
+
+				struct rgb *chosen_colour = &palette[z + 256];
+				SDL_SetRenderDrawColor(
+					renderer,
+					chosen_colour->r,
+					chosen_colour->g,
+					chosen_colour->b,
+					SDL_ALPHA_OPAQUE
+				);
 				SDL_RenderDrawPoint(renderer, row_offset, row);
 
 				t3 += 1;
@@ -144,15 +196,16 @@ int main() {
 			t2 += 1;
 		}
 
-		// Causes the renderer to push whatever it's done since last time to
-			// the window it's tied to
-			SDL_RenderPresent(renderer);
-			p1 += sp1; p1 %= 256;
-			p2 -= sp2; p2 %= 256;
-			p3 += sp3; p3 %= 256;
-			p4 -= sp4; p4 %= 256;
-	//}
-	SDL_Delay(3000);
+		// Causes the renderer to push whatever it's done since last time
+		// to the window it's tied to
+		SDL_RenderPresent(renderer);
+
+		p1 += sp1;
+		p2 -= sp2;
+		p3 += sp3;
+		p4 -= sp4;
+
+	}
 
 	SDL_DestroyWindow(window);
 	SDL_DestroyRenderer(renderer);
