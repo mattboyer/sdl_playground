@@ -46,6 +46,61 @@ void prepare_palette() {
 	}
 };
 
+void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3, int p4) {
+
+	// These are used as indices on the sin curve. They may be positive or
+	// negative
+	int t1, t2, t3, t4;
+
+	unsigned int surface_row, row_offset;
+
+	int row_base_palette_index, pixel_palette_index;
+
+	t1 = p1;
+	t2 = p2;
+	for (surface_row = 0; surface_row < plasma_surface->h; ++surface_row) {
+
+		// XXX Why do we reset t3 and t4 for every row?
+		t3 = p3;
+		t4 = p4;
+
+		/* THE VALUES WE READ FROM sin_array MAY BE NEGATIVE!!!
+		 * Ergo, -256 < pixel_palette_index < 256
+		 * The palette must cover the range from -256 to 256
+		 */
+
+		/* There are SIN_INDICES increments between 0 and 2PI,
+		 * therefore sin(x) = sin(x % SIN_INDICES)
+		 */
+		t1 %= SIN_INDICES;
+		t2 %= SIN_INDICES;
+
+		/* Also, the sin indices t1..t4 may have positive or negative values. sin(-a) = -sin(a) */
+		row_base_palette_index = SIN(t1) + SIN(t2);
+		for(row_offset = 0; row_offset < plasma_surface->h; ++row_offset) {
+			t3 %= SIN_INDICES;
+			t4 %= SIN_INDICES;
+
+			pixel_palette_index = row_base_palette_index + SIN(t3) + SIN(t4);
+			struct rgb *chosen_colour = &palette[pixel_palette_index + 256];
+
+			Uint32 *gruh = (Uint32*) plasma_surface->pixels;
+			gruh[plasma_surface->w * surface_row + row_offset] = SDL_MapRGBA(
+				plasma_surface->format,
+				chosen_colour->r,
+				chosen_colour->g,
+				chosen_colour->b,
+				SDL_ALPHA_OPAQUE
+			);
+
+			t3 += 1;
+			t4 += 2;
+		}
+		t1 += 2;
+		t2 += 1;
+	}
+};
+
 int main() {
 	prepare_sin();
 	prepare_palette();
@@ -108,17 +163,15 @@ int main() {
 		SDL_WINDOWPOS_UNDEFINED,
 		450,
 		250,
-		SDL_WINDOW_BORDERLESS|SDL_WINDOW_FULLSCREEN_DESKTOP|SDL_WINDOW_BORDERLESS
+		SDL_WINDOW_BORDERLESS|SDL_WINDOW_FULLSCREEN_DESKTOP
 	);
+	SDL_ShowCursor(false);
 
-	renderer = SDL_CreateRenderer(window, -1, 0);
-
-	SDL_RendererInfo driver_info;
-	SDL_GetRendererInfo(renderer, &driver_info);
-	printf("Active renderer uses \"%s\" driver\n", driver_info.name);
-
-	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
-	SDL_RenderClear(renderer);
+	renderer = SDL_CreateRenderer(
+		window,
+		-1,
+		SDL_RENDERER_PRESENTVSYNC|SDL_RENDERER_ACCELERATED
+	);
 
 	// I want to use a Surface to directly access pixels
 	// I'll then create a texture FROM that surface that the window renderer will copy FROM
@@ -131,91 +184,70 @@ int main() {
 		0, 0, 0, 0
 	);
 
-	unsigned int surface_row, row_offset;
-
 	// These are incremented for every frame by their respective sp*
 	// increments
 	int p1, p2, p3, p4;
 	p1=p2=p3=p4=0;
 
-	// I think these are increments
-	int sp1, sp2, sp3, sp4;
+	// These are increments
+	static unsigned int sp1, sp2, sp3, sp4;
 	sp1 = 4;
 	sp2 = 2;
 	sp3 = 4;
-	sp4 = 2;
+	sp4 = 3;
 
-	// These are used as indices on the sin curve
-	int t1, t2, t3, t4;
-
-	// TODO WTF?
-	int z0, z;
-
-	while (true) {
-
-		t1 = p1;
-		t2 = p2;
+	bool running = true;
+	while (running) {
 
 		SDL_LockSurface(my_surface);
-		for (surface_row = 0; surface_row < my_surface->h; ++surface_row) {
-			t3 = p3;
-			t4 = p4;
-
-			/* THE VALUES WE READ FROM sin_array MAY BE NEGATIVE!!!
-			 * Ergo, -256 < z < 256
-			 * The palette must cover the range from -256 to 256
-			 */
-
-			/* Also, the sin indices t1..t4 may have positive or negative values. sin(-a) = -sin(a) */
-			t1 %= SIN_INDICES;
-			t2 %= SIN_INDICES;
-			z0 = SIN(t1) + SIN(t2);
-			for(row_offset = 0; row_offset < my_surface->h; ++row_offset) {
-				t3 %= SIN_INDICES;
-				t4 %= SIN_INDICES;
-				z = z0 + SIN(t3) + SIN(t4);
-
-				struct rgb *chosen_colour = &palette[z + 256];
-
-				Uint32 *gruh = (Uint32*) my_surface->pixels;
-				gruh[my_surface->w * surface_row + row_offset] = SDL_MapRGBA(
-					my_surface->format,
-					chosen_colour->r,
-					chosen_colour->g,
-					chosen_colour->b,
-					SDL_ALPHA_OPAQUE
-				);
-
-				t3 += 1;
-				t4 += 2;
-			}
-			t1 += 2;
-			t2 += 1;
-		}
+		draw_plasma_to_surface(my_surface, p1, p2, p3, p4);
 		SDL_UnlockSurface(my_surface);
+
+		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
+		SDL_RenderClear(renderer);
+
 		source_texture = SDL_CreateTextureFromSurface(
 			renderer,
 			my_surface
 		);
 		SDL_RenderCopy(renderer, source_texture, NULL, NULL);
+		SDL_DestroyTexture(source_texture);
 
 		// Causes the renderer to push whatever it's done since last time
 		// to the window it's tied to
 		SDL_RenderPresent(renderer);
+
+		//SDL_Delay(40);
 
 		p1 += sp1;
 		p2 -= sp2;
 		p3 += sp3;
 		p4 -= sp4;
 
-		SDL_PumpEvents();
-		if (SDL_QuitRequested())
-			break;
+		SDL_Event event;
+		while (0 != SDL_PollEvent(&event)) {
+			if (SDL_QUIT == event.type)
+				running = false;
+			if (SDL_KEYDOWN == event.type) {
+				if (event.key.keysym.sym == SDLK_q)
+					running = false;
+				if (event.key.keysym.sym == SDLK_f) {
+					if (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+						SDL_SetWindowFullscreen(window, 0);
+						SDL_SetWindowSize(window, 400, 500);
+						SDL_SetWindowBordered(window, true);
+					} else {
+						SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+						SDL_SetWindowBordered(window, false);
+					}
+				}
+			}
+		}
 	}
 
-	SDL_DestroyWindow(window);
+	SDL_FreeSurface(my_surface);
 	SDL_DestroyRenderer(renderer);
-	SDL_DestroyTexture(source_texture);
+	SDL_DestroyWindow(window);
 
 	SDL_Quit();
 }
