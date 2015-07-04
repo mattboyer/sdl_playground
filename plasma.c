@@ -7,7 +7,9 @@
 #define PLASMA_WIDTH	128
 #define PLASMA_HEIGHT	128
 
+#define SIN_AMPLITUDE	64
 #define SIN_INDICES		256
+#define PLASMA_PEAK		4 * SIN_AMPLITUDE
 
 #define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
 
@@ -19,12 +21,12 @@ struct rgb {
 	unsigned int b;
 };
 
-static struct rgb palette[2 * SIN_INDICES];
+static struct rgb palette[2 * PLASMA_PEAK];
 
 void prepare_sin() {
 	int i;
 	for (i=0; i < SIN_INDICES; ++i) {
-		sin_array[i] = (int) 64 * sin(2 * M_PI * i / SIN_INDICES);
+		sin_array[i] = (int) SIN_AMPLITUDE * sin(2 * M_PI * i / SIN_INDICES);
 	}
 };
 
@@ -32,17 +34,17 @@ void prepare_palette() {
 	int palette_idx;
 
 	// Colours for negative indices are shades of red
-	for (palette_idx = -256; palette_idx < 0; ++palette_idx) {
-		palette[palette_idx + 256].r = -palette_idx;
-		palette[palette_idx + 256].g = 0;
-		palette[palette_idx + 256].b = 0;
+	for (palette_idx = -PLASMA_PEAK; palette_idx < 0; ++palette_idx) {
+		palette[palette_idx + PLASMA_PEAK].r = -palette_idx;
+		palette[palette_idx + PLASMA_PEAK].g = 0;
+		palette[palette_idx + PLASMA_PEAK].b = 0;
 	}
 
 	// Colours for positive indices are shades of green
-	for (palette_idx = 0; palette_idx < 256; ++palette_idx) {
-		palette[palette_idx + 256].r = 0;
-		palette[palette_idx + 256].g = palette_idx;
-		palette[palette_idx + 256].b = 0;
+	for (palette_idx = 0; palette_idx < PLASMA_PEAK; ++palette_idx) {
+		palette[palette_idx + PLASMA_PEAK].r = 0;
+		palette[palette_idx + PLASMA_PEAK].g = palette_idx;
+		palette[palette_idx + PLASMA_PEAK].b = 0;
 	}
 };
 
@@ -175,11 +177,12 @@ int main() {
 
 	// I want to use a Surface to directly access pixels
 	// I'll then create a texture FROM that surface that the window renderer will copy FROM
+	// XXX Why do we even need alpha??? Can I not create a surface that uses an
+	// indexed pixel format referencing a propert SDL_Palette?
 	my_surface = SDL_CreateRGBSurface(
 		0,
 		PLASMA_WIDTH,
 		PLASMA_HEIGHT,
-		// Why do we even need alpha???
 		32,
 		0, 0, 0, 0
 	);
@@ -217,8 +220,6 @@ int main() {
 		// Causes the renderer to push whatever it's done since last time
 		// to the window it's tied to
 		SDL_RenderPresent(renderer);
-
-		//SDL_Delay(40);
 
 		p1 += sp1;
 		p2 -= sp2;
