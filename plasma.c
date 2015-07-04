@@ -6,6 +6,9 @@
 
 #define SIN_INDICES 256
 
+#define SURFACE_HEIGHT 250
+#define SURFACE_WIDTH 250
+
 #define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
 
 static int sin_array[SIN_INDICES];
@@ -85,7 +88,7 @@ int main() {
 	 *
 	 * Textures can be locked and unlocked
 	 */
-	SDL_Texture *render_target;
+	SDL_Texture *source_texture;
 
 	/*
 	 * A rectangle is just an "empty" rectangle with width, height and a
@@ -98,13 +101,17 @@ int main() {
 
 	SDL_Init(SDL_INIT_VIDEO);
 
-	SDL_CreateWindowAndRenderer(
-		400, // width, in pixels
-		400, // height, in pixels
-		0,
-		&window,
-		&renderer
+	window = SDL_CreateWindow(
+		"Plasma",
+		SDL_WINDOWPOS_UNDEFINED,
+		SDL_WINDOWPOS_UNDEFINED,
+		450,
+		250,
+		SDL_WINDOW_BORDERLESS|SDL_WINDOW_FULLSCREEN_DESKTOP|SDL_WINDOW_BORDERLESS
 	);
+
+	renderer = SDL_CreateRenderer(window, -1, 0);
+
 	SDL_RendererInfo driver_info;
 	SDL_GetRendererInfo(renderer, &driver_info);
 	printf("Active renderer uses \"%s\" driver\n", driver_info.name);
@@ -115,16 +122,28 @@ int main() {
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
 
+	// I want to use a Surface to directly access pixels
+	// I'll then create a texture FROM that surface that the window renderer will copy FROM
+
+	my_surface = SDL_CreateRGBSurface(
+		0,
+		SURFACE_HEIGHT,
+		SURFACE_WIDTH,
+		// Why do we even need alpha???
+		32,
+		0, 0, 0, 0
+	);
+
+
 
 	int t_w=0, t_h=0;
 	SDL_GetRendererOutputSize(renderer, &t_w, &t_h);
 	printf("%d x %d\n", t_w, t_h);
 
-	if (render_target = SDL_GetRenderTarget(renderer)) {
-		t_w = t_h = 0;
-		SDL_QueryTexture(render_target, NULL, NULL, &t_w, &t_h);
-		printf("Texture %d x %d\n", t_w, t_h);
-	}
+	if (SDL_RenderTargetSupported(renderer))
+		printf("The window renderer supports targets\n");
+	else
+		printf("The window renderer DOES NOT support targets\n");
 
 	int row, row_offset;
 
@@ -150,7 +169,9 @@ int main() {
 
 		t1 = p1;
 		t2 = p2;
-		for (row = 0; row < t_h; ++row) {
+
+		SDL_LockSurface(my_surface);
+		for (row = 0; row < SURFACE_HEIGHT; ++row) {
 			t3 = p3;
 			t4 = p4;
 
@@ -163,25 +184,21 @@ int main() {
 			t1 %= SIN_INDICES;
 			t2 %= SIN_INDICES;
 			z0 = SIN(t1) + SIN(t2);
-			for(row_offset = 0; row_offset < t_w; ++row_offset) {
-				/*
-				t3 = t3 % 256;
-				t4 = t4 % 256;
-				*/
-
-			t3 %= SIN_INDICES;
-			t4 %= SIN_INDICES;
+			for(row_offset = 0; row_offset < SURFACE_WIDTH; ++row_offset) {
+				t3 %= SIN_INDICES;
+				t4 %= SIN_INDICES;
 				z = z0 + SIN(t3) + SIN(t4);
 
 				struct rgb *chosen_colour = &palette[z + 256];
-				SDL_SetRenderDrawColor(
-					renderer,
+
+				Uint32 *gruh = (Uint32*) my_surface->pixels;
+				gruh[SURFACE_WIDTH * row + row_offset] = SDL_MapRGBA(
+					my_surface->format,
 					chosen_colour->r,
 					chosen_colour->g,
 					chosen_colour->b,
 					SDL_ALPHA_OPAQUE
 				);
-				SDL_RenderDrawPoint(renderer, row_offset, row);
 
 				t3 += 1;
 				t4 += 2;
@@ -189,6 +206,12 @@ int main() {
 			t1 += 2;
 			t2 += 1;
 		}
+		SDL_UnlockSurface(my_surface);
+		source_texture = SDL_CreateTextureFromSurface(
+			renderer,
+			my_surface
+		);
+		SDL_RenderCopy(renderer, source_texture, NULL, NULL);
 
 		// Causes the renderer to push whatever it's done since last time
 		// to the window it's tied to
@@ -206,7 +229,7 @@ int main() {
 
 	SDL_DestroyWindow(window);
 	SDL_DestroyRenderer(renderer);
-	SDL_DestroyTexture(render_target);
+	SDL_DestroyTexture(source_texture);
 
 	SDL_Quit();
 }
