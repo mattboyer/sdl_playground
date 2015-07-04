@@ -11,6 +11,7 @@
 #define PLASMA_PEAK		4 * SIN_AMPLITUDE
 
 #define SIN_INDICES		256
+/* sin(-a) = -sin(a) */
 #define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
 
 static int sin_array[SIN_INDICES];
@@ -56,14 +57,12 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 		t3 = p3;
 		t4 = p4;
 
-
 		/* There are SIN_INDICES increments between 0 and 2PI,
 		 * therefore sin(x) = sin(x % SIN_INDICES)
 		 */
 		t1 %= SIN_INDICES;
 		t2 %= SIN_INDICES;
 
-		/* Also, the sin indices t1..t4 may have positive or negative values. sin(-a) = -sin(a) */
 		row_base_palette_index = SIN(t1) + SIN(t2);
 		for(row_offset = 0; row_offset < plasma_surface->w; ++row_offset) {
 			t3 %= SIN_INDICES;
@@ -71,8 +70,7 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 
 			pixel_palette_index = row_base_palette_index + SIN(t3) + SIN(t4);
 
-			Uint8 *gruh = (Uint8*) plasma_surface->pixels;
-			gruh[plasma_surface->w * surface_row + row_offset] = PLASMA_PEAK + pixel_palette_index;
+			((Uint8*) plasma_surface->pixels)[plasma_surface->w * surface_row + row_offset] = PLASMA_PEAK + pixel_palette_index;
 			t3 += 1;
 			t4 += 2;
 		}
@@ -132,7 +130,7 @@ int main() {
 	 * Among other things, these are used to designate sections of other
 	 * 2-dimensional entities.
 	 */
-	SDL_Rect dest_rect;
+	//SDL_Rect dest_rect;
 
 	SDL_Init(SDL_INIT_VIDEO);
 
