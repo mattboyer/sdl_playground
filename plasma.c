@@ -40,7 +40,6 @@ void prepare_palette(SDL_Palette *plasma_palette) {
 };
 
 void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3, int p4) {
-
 	// These are used as indices on the sin curve. They may be positive or
 	// negative
 	int t1, t2, t3, t4;
@@ -73,7 +72,7 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 			pixel_palette_index = row_base_palette_index + SIN(t3) + SIN(t4);
 
 			Uint8 *gruh = (Uint8*) plasma_surface->pixels;
-			gruh[plasma_surface->w * surface_row + row_offset] = pixel_palette_index;
+			gruh[plasma_surface->w * surface_row + row_offset] = PLASMA_PEAK + pixel_palette_index;
 			t3 += 1;
 			t4 += 2;
 		}
