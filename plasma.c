@@ -117,23 +117,8 @@ int main() {
 	SDL_GetRendererInfo(renderer, &driver_info);
 	printf("Active renderer uses \"%s\" driver\n", driver_info.name);
 
-	// TODO Use a different texture for rendering then SDL_RenderCopy() it
-	// onto the window's renderer
-	// Is that really necessary?
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
-
-
-
-
-	int t_w=0, t_h=0;
-	SDL_GetRendererOutputSize(renderer, &t_w, &t_h);
-	printf("%d x %d\n", t_w, t_h);
-
-	if (SDL_RenderTargetSupported(renderer))
-		printf("The window renderer supports targets\n");
-	else
-		printf("The window renderer DOES NOT support targets\n");
 
 	// I want to use a Surface to directly access pixels
 	// I'll then create a texture FROM that surface that the window renderer will copy FROM
