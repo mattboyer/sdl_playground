@@ -4,8 +4,8 @@
 
 #include "SDL.h"
 
-#define PLASMA_WIDTH	320
-#define PLASMA_HEIGHT	240
+#define PLASMA_WIDTH	128
+#define PLASMA_HEIGHT	128
 
 #define SIN_INDICES		256
 
@@ -77,7 +77,7 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 
 		/* Also, the sin indices t1..t4 may have positive or negative values. sin(-a) = -sin(a) */
 		row_base_palette_index = SIN(t1) + SIN(t2);
-		for(row_offset = 0; row_offset < plasma_surface->h; ++row_offset) {
+		for(row_offset = 0; row_offset < plasma_surface->w; ++row_offset) {
 			t3 %= SIN_INDICES;
 			t4 %= SIN_INDICES;
 
@@ -153,7 +153,7 @@ int main() {
 	 * Among other things, these are used to designate sections of other
 	 * 2-dimensional entities.
 	 */
-	SDL_Rect draw_rect;
+	SDL_Rect dest_rect;
 
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -161,8 +161,8 @@ int main() {
 		"Plasma",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
-		450,
-		250,
+		50,
+		50,
 		SDL_WINDOW_BORDERLESS|SDL_WINDOW_FULLSCREEN_DESKTOP
 	);
 	SDL_ShowCursor(false);
@@ -210,6 +210,7 @@ int main() {
 			renderer,
 			my_surface
 		);
+
 		SDL_RenderCopy(renderer, source_texture, NULL, NULL);
 		SDL_DestroyTexture(source_texture);
 
@@ -234,7 +235,7 @@ int main() {
 				if (event.key.keysym.sym == SDLK_f) {
 					if (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN_DESKTOP) {
 						SDL_SetWindowFullscreen(window, 0);
-						SDL_SetWindowSize(window, 400, 500);
+						SDL_SetWindowSize(window, PLASMA_WIDTH, PLASMA_HEIGHT);
 						SDL_SetWindowBordered(window, true);
 					} else {
 						SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
