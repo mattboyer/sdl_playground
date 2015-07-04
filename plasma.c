@@ -4,10 +4,10 @@
 
 #include "SDL.h"
 
-#define SIN_INDICES 256
+#define PLASMA_WIDTH	320
+#define PLASMA_HEIGHT	240
 
-#define SURFACE_HEIGHT 250
-#define SURFACE_WIDTH 250
+#define SIN_INDICES		256
 
 #define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
 
@@ -73,7 +73,8 @@ int main() {
 	/*
 	 * This is basically what other APIs call a Canvas. You've got a 2D
 	 * array of pixels in a certain format. SDL_Surface is the old,
-	 * painful, unaccelerated equivalent of SDL_Texture.
+	 * painful, unaccelerated equivalent of SDL_Texture and is mostly useful
+	 * for pixel-level stuff
 	 */
 	SDL_Surface *my_surface;
 
@@ -82,7 +83,7 @@ int main() {
 	 * width, height and a specific pixel format.
 	 *
 	 * A texture can be copied onto the renderer's target (after it's been
-	 * used for "offline" rendering.
+	 * used for "offline" rendering).
 	 *
 	 * A texture can be created from a surface
 	 *
@@ -122,17 +123,6 @@ int main() {
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
 
-	// I want to use a Surface to directly access pixels
-	// I'll then create a texture FROM that surface that the window renderer will copy FROM
-
-	my_surface = SDL_CreateRGBSurface(
-		0,
-		SURFACE_HEIGHT,
-		SURFACE_WIDTH,
-		// Why do we even need alpha???
-		32,
-		0, 0, 0, 0
-	);
 
 
 
@@ -145,7 +135,18 @@ int main() {
 	else
 		printf("The window renderer DOES NOT support targets\n");
 
-	int row, row_offset;
+	// I want to use a Surface to directly access pixels
+	// I'll then create a texture FROM that surface that the window renderer will copy FROM
+	my_surface = SDL_CreateRGBSurface(
+		0,
+		PLASMA_WIDTH,
+		PLASMA_HEIGHT,
+		// Why do we even need alpha???
+		32,
+		0, 0, 0, 0
+	);
+
+	unsigned int surface_row, row_offset;
 
 	// These are incremented for every frame by their respective sp*
 	// increments
@@ -171,7 +172,7 @@ int main() {
 		t2 = p2;
 
 		SDL_LockSurface(my_surface);
-		for (row = 0; row < SURFACE_HEIGHT; ++row) {
+		for (surface_row = 0; surface_row < my_surface->h; ++surface_row) {
 			t3 = p3;
 			t4 = p4;
 
@@ -184,7 +185,7 @@ int main() {
 			t1 %= SIN_INDICES;
 			t2 %= SIN_INDICES;
 			z0 = SIN(t1) + SIN(t2);
-			for(row_offset = 0; row_offset < SURFACE_WIDTH; ++row_offset) {
+			for(row_offset = 0; row_offset < my_surface->h; ++row_offset) {
 				t3 %= SIN_INDICES;
 				t4 %= SIN_INDICES;
 				z = z0 + SIN(t3) + SIN(t4);
@@ -192,7 +193,7 @@ int main() {
 				struct rgb *chosen_colour = &palette[z + 256];
 
 				Uint32 *gruh = (Uint32*) my_surface->pixels;
-				gruh[SURFACE_WIDTH * row + row_offset] = SDL_MapRGBA(
+				gruh[my_surface->w * surface_row + row_offset] = SDL_MapRGBA(
 					my_surface->format,
 					chosen_colour->r,
 					chosen_colour->g,
