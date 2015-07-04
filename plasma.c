@@ -7,21 +7,13 @@
 #define PLASMA_WIDTH	128
 #define PLASMA_HEIGHT	128
 
-#define SIN_AMPLITUDE	64
-#define SIN_INDICES		256
+#define SIN_AMPLITUDE	32
 #define PLASMA_PEAK		4 * SIN_AMPLITUDE
 
+#define SIN_INDICES		256
 #define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
 
 static int sin_array[SIN_INDICES];
-
-struct rgb {
-	unsigned int r;
-	unsigned int g;
-	unsigned int b;
-};
-
-static struct rgb palette[2 * PLASMA_PEAK];
 
 void prepare_sin() {
 	int i;
@@ -30,21 +22,20 @@ void prepare_sin() {
 	}
 };
 
-void prepare_palette() {
+void prepare_palette(SDL_Palette *plasma_palette) {
+	/* The values we read from the sin curve are
+	 * -SIN_AMPLITUDE <= x <= SIN_AMPLITUDE
+	 * We use 4 points on the curve, therefore the index of a point on the plasma surface will be
+	 * -4*SIN_AMPLITUDE < pixel_palette_index < 4*SIN_AMPLITUDE
+	 * The palette must cover the range from -256 to 256
+	 */
+
 	int palette_idx;
 
-	// Colours for negative indices are shades of red
-	for (palette_idx = -PLASMA_PEAK; palette_idx < 0; ++palette_idx) {
-		palette[palette_idx + PLASMA_PEAK].r = -palette_idx;
-		palette[palette_idx + PLASMA_PEAK].g = 0;
-		palette[palette_idx + PLASMA_PEAK].b = 0;
-	}
-
-	// Colours for positive indices are shades of green
-	for (palette_idx = 0; palette_idx < PLASMA_PEAK; ++palette_idx) {
-		palette[palette_idx + PLASMA_PEAK].r = 0;
-		palette[palette_idx + PLASMA_PEAK].g = palette_idx;
-		palette[palette_idx + PLASMA_PEAK].b = 0;
+	for (palette_idx = 0; palette_idx < 2 * PLASMA_PEAK; ++palette_idx) {
+		plasma_palette->colors[palette_idx].r = palette_idx;
+		plasma_palette->colors[palette_idx].g = palette_idx;
+		plasma_palette->colors[palette_idx].b = palette_idx;
 	}
 };
 
@@ -66,10 +57,6 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 		t3 = p3;
 		t4 = p4;
 
-		/* THE VALUES WE READ FROM sin_array MAY BE NEGATIVE!!!
-		 * Ergo, -256 < pixel_palette_index < 256
-		 * The palette must cover the range from -256 to 256
-		 */
 
 		/* There are SIN_INDICES increments between 0 and 2PI,
 		 * therefore sin(x) = sin(x % SIN_INDICES)
@@ -84,17 +71,9 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 			t4 %= SIN_INDICES;
 
 			pixel_palette_index = row_base_palette_index + SIN(t3) + SIN(t4);
-			struct rgb *chosen_colour = &palette[pixel_palette_index + 256];
 
-			Uint32 *gruh = (Uint32*) plasma_surface->pixels;
-			gruh[plasma_surface->w * surface_row + row_offset] = SDL_MapRGBA(
-				plasma_surface->format,
-				chosen_colour->r,
-				chosen_colour->g,
-				chosen_colour->b,
-				SDL_ALPHA_OPAQUE
-			);
-
+			Uint8 *gruh = (Uint8*) plasma_surface->pixels;
+			gruh[plasma_surface->w * surface_row + row_offset] = pixel_palette_index;
 			t3 += 1;
 			t4 += 2;
 		}
@@ -105,7 +84,6 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 
 int main() {
 	prepare_sin();
-	prepare_palette();
 
 	/*
 	 * A window is just a window, with height, width, a title and a
@@ -186,6 +164,10 @@ int main() {
 		32,
 		0, 0, 0, 0
 	);
+	SDL_Surface *palette_surface = SDL_ConvertSurfaceFormat(my_surface, SDL_PIXELFORMAT_INDEX8, 0);
+	SDL_FreeSurface(my_surface);
+
+	prepare_palette(palette_surface->format->palette);
 
 	// These are incremented for every frame by their respective sp*
 	// increments
@@ -197,21 +179,21 @@ int main() {
 	sp1 = 4;
 	sp2 = 2;
 	sp3 = 4;
-	sp4 = 3;
+	sp4 = 2;
 
 	bool running = true;
 	while (running) {
 
-		SDL_LockSurface(my_surface);
-		draw_plasma_to_surface(my_surface, p1, p2, p3, p4);
-		SDL_UnlockSurface(my_surface);
+		SDL_LockSurface(palette_surface);
+		draw_plasma_to_surface(palette_surface, p1, p2, p3, p4);
+		SDL_UnlockSurface(palette_surface);
 
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(renderer);
 
 		source_texture = SDL_CreateTextureFromSurface(
 			renderer,
-			my_surface
+			palette_surface
 		);
 
 		SDL_RenderCopy(renderer, source_texture, NULL, NULL);
@@ -247,7 +229,7 @@ int main() {
 		}
 	}
 
-	SDL_FreeSurface(my_surface);
+	SDL_FreeSurface(palette_surface);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 
