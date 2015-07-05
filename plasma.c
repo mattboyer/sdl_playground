@@ -10,6 +10,9 @@
 #define SIN_AMPLITUDE	32
 #define PLASMA_PEAK		4 * SIN_AMPLITUDE
 
+#define PALETTE_DEPTH 8
+#define PALETTE_COLOURS (1<< PALETTE_DEPTH)
+
 #define SIN_INDICES		256
 /* sin(-a) = -sin(a) */
 #define SIN(x) (x>=0?sin_array[x]:-sin_array[-x])
@@ -17,26 +20,64 @@
 static int sin_array[SIN_INDICES];
 
 void prepare_sin() {
-	int i;
-	for (i=0; i < SIN_INDICES; ++i) {
-		sin_array[i] = (int) SIN_AMPLITUDE * sin(2 * M_PI * i / SIN_INDICES);
-	}
+	unsigned int i;
+	for (i=0; i < SIN_INDICES; ++i)
+		sin_array[i] = (int) (SIN_AMPLITUDE * sin(2 * M_PI * i / SIN_INDICES));
 };
 
-void prepare_palette(SDL_Palette *plasma_palette) {
+void prepare_palette(SDL_Palette *plasma_palette, unsigned int time) {
 	/* The values we read from the sin curve are
 	 * -SIN_AMPLITUDE <= x <= SIN_AMPLITUDE
-	 * We use 4 points on the curve, therefore the index of a point on the plasma surface will be
+	 * We use 4 points on the curve, therefore the index of a point on the
+	 * plasma surface will be:
 	 * -4*SIN_AMPLITUDE < pixel_palette_index < 4*SIN_AMPLITUDE
-	 * The palette must cover the range from -256 to 256
+	 */
+	static int redfactor = 1, greenfactor = 2, bluefactor = 3;
+	static int redphase = 0, greenphase = 50, bluephase = 100;
+
+
+	unsigned int red, green, blue;
+	unsigned int base_red, base_green, base_blue;
+
+	// These are the base values for index 0 of the palette
+	base_red = time * redfactor + redphase;
+	base_green = time * greenfactor + greenphase;
+	base_blue = time * bluefactor + bluephase;
+
+	/*
+	 * Ultimately, the R, G and B components in the palette must be
+	 * 0 <= r,g,b <= 255
+	 *
+	 * The red, green and blue factors derived from the time counter are
+	 * monotonically increasing quantities, type notwithstanding (ie, they'd
+	 * grow to infinity given enough bits).
+	 *
+	 * What we want is for each component value to grow from 0 to 255 and back
+	 * down to 0. The rockbox code does this by doubling the least significant
+	 * byte of the values (ie, from 0 to * 510) and subtracting values greater
+	 * than 255 from 510 to ramp down.
+	 * It's pretty clever *but* it'll only work if the variables are stored in
+	 * types that allow values greater than 255. In other words, we must cast
+	 * to Uint8 *after* the conversion and ramp-down.
 	 */
 
-	int palette_idx;
+	for (unsigned int palette_idx = 0; palette_idx < PALETTE_COLOURS - 1; ++palette_idx) {
+		base_red &= 0xFF; red = 2 * base_red;
+		base_green &= 0xFF; green = 2 * base_green;
+		base_blue &= 0xFF; blue = 2 * base_blue;
 
-	for (palette_idx = 0; palette_idx < 2 * PLASMA_PEAK; ++palette_idx) {
-		plasma_palette->colors[palette_idx].r = palette_idx;
-		plasma_palette->colors[palette_idx].g = palette_idx;
-		plasma_palette->colors[palette_idx].b = palette_idx;
+		if (red > 255)
+			red = 510 - red;
+		if (green > 255)
+			green = 510 - green;
+		if (blue > 255)
+			blue = 510 - blue;
+
+		plasma_palette->colors[palette_idx].r = (Uint8) red;
+		plasma_palette->colors[palette_idx].g = (Uint8) green;
+		plasma_palette->colors[palette_idx].b = (Uint8) blue;
+
+		base_red++; base_green++; base_blue++;
 	}
 };
 
@@ -45,7 +86,7 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 	// negative
 	int t1, t2, t3, t4;
 
-	unsigned int surface_row, row_offset;
+	int surface_row, row_offset;
 
 	int row_base_palette_index, pixel_palette_index;
 
@@ -70,7 +111,7 @@ void draw_plasma_to_surface(SDL_Surface *plasma_surface, int p1, int p2, int p3,
 
 			pixel_palette_index = row_base_palette_index + SIN(t3) + SIN(t4);
 
-			((Uint8*) plasma_surface->pixels)[plasma_surface->w * surface_row + row_offset] = PLASMA_PEAK + pixel_palette_index;
+			((Uint8*) plasma_surface->pixels)[plasma_surface->w * surface_row + row_offset] = (Uint8) (PLASMA_PEAK + pixel_palette_index);
 			t3 += 1;
 			t4 += 2;
 		}
@@ -151,7 +192,8 @@ int main() {
 	);
 
 	// I want to use a Surface to directly access pixels
-	// I'll then create a texture FROM that surface that the window renderer will copy FROM
+	// I'll then create a texture FROM that surface that the window renderer
+	// will copy FROM
 	// XXX Why do we even need alpha??? Can I not create a surface that uses an
 	// indexed pixel format referencing a propert SDL_Palette?
 	my_surface = SDL_CreateRGBSurface(
@@ -161,10 +203,13 @@ int main() {
 		32,
 		0, 0, 0, 0
 	);
-	SDL_Surface *palette_surface = SDL_ConvertSurfaceFormat(my_surface, SDL_PIXELFORMAT_INDEX8, 0);
+	SDL_Surface *palette_surface = SDL_ConvertSurfaceFormat(
+		my_surface,
+		SDL_PIXELFORMAT_INDEX8,
+		0
+	);
 	SDL_FreeSurface(my_surface);
 
-	prepare_palette(palette_surface->format->palette);
 
 	// These are incremented for every frame by their respective sp*
 	// increments
@@ -172,16 +217,14 @@ int main() {
 	p1=p2=p3=p4=0;
 
 	// These are increments
-	static unsigned int sp1, sp2, sp3, sp4;
-	sp1 = 4;
-	sp2 = 2;
-	sp3 = 4;
-	sp4 = 2;
+	static unsigned int sp1 = 4, sp2 = 2, sp3 = 4, sp4 = 2;
 
 	bool running = true;
+	unsigned int time = 0;
 	while (running) {
 
 		SDL_LockSurface(palette_surface);
+		prepare_palette(palette_surface->format->palette, ++time);
 		draw_plasma_to_surface(palette_surface, p1, p2, p3, p4);
 		SDL_UnlockSurface(palette_surface);
 
