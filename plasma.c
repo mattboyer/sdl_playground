@@ -4,14 +4,14 @@
 
 #include "SDL.h"
 
-#define PLASMA_WIDTH	128
-#define PLASMA_HEIGHT	128
+#define PLASMA_WIDTH	160
+#define PLASMA_HEIGHT	90
 
-#define SIN_AMPLITUDE	32
-#define PLASMA_PEAK		4 * SIN_AMPLITUDE
-
-#define PALETTE_DEPTH 8
+#define PALETTE_DEPTH	8
 #define PALETTE_COLOURS (1<< PALETTE_DEPTH)
+
+#define PLASMA_PEAK		(PALETTE_COLOURS / 2)
+#define SIN_AMPLITUDE	(PLASMA_PEAK / 4)
 
 #define SIN_INDICES		256
 /* sin(-a) = -sin(a) */
@@ -34,7 +34,6 @@ void prepare_palette(SDL_Palette *plasma_palette, unsigned int time) {
 	 */
 	static int redfactor = 1, greenfactor = 2, bluefactor = 3;
 	static int redphase = 0, greenphase = 50, bluephase = 100;
-
 
 	unsigned int red, green, blue;
 	unsigned int base_red, base_green, base_blue;
