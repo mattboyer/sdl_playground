@@ -1,8 +1,10 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <math.h>
 
 #include "SDL.h"
+
+# define M_PI		3.14159265358979323846	/* pi */
 
 #define PLASMA_WIDTH	160
 #define PLASMA_HEIGHT	90

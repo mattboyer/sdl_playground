@@ -16,6 +16,7 @@ foreach (sdl_source ${${PROJECT_NAME}_SRCS})
 	message(STATUS "Compiling ${sdl_source} to ${sdl_executable}")
 	add_executable ("${sdl_executable}" "${sdl_source}")
 	target_link_libraries ("${sdl_executable}" ${SDL2_LIBRARIES} m)
+	set_target_properties ("${sdl_executable}" PROPERTIES "COMPILE_FLAGS" "-Wall -std=c99")
 endforeach (sdl_source ${${PROJECT_NAME}_SRCS})
 
 # vim:set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab :
