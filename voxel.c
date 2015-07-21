@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <time.h>
 
 #include "SDL.h"
 
@@ -22,25 +23,27 @@ struct elevation_map {
 };
 
 void random_unit_vector(struct vector *dest) {
-	float angle = ((float) rand() * 2 * M_PI) /  (RAND_MAX);
+	float angle = ((float) rand() * 2 * M_PI) / (RAND_MAX);
 	dest->x = cos(angle);
 	dest->y = sin(angle);
 };
 
-float decreasing_interpolant(float x) {
-	return 2 * pow(x, 3) - 3 * pow(x, 3) + 1;
+float increasing_interpolant(float x) {
+	// x=0 -> 0
+	// x=1 -> 1
+	// x=0.5 -> 0.5
+	return 3 * pow(x, 2) - 2 * pow(x, 3);
 };
 
-float increasing_interpolant(float x) {
-	return 1 - decreasing_interpolant(x);
+float decreasing_interpolant(float x) {
+	return 1 - increasing_interpolant(x);
 };
 
 float dot_product(const struct vector *lhs, const struct vector *rhs) {
 	/*
-	 * For each vector, we have -1 <= x <= 1 (within a cell of the grid)
-	 * or -surface->width <= x <= surface->width
+	 * For each vector, we have -1 <= x,y <= 1 (within a cell of the grid)
 	 * the product is 
-	 * -2 width^2 <=prod <= 2 width^2
+	 * -2 <= dot_product <= 2
 	 */
 	return (lhs->x * rhs->x) + (lhs->y * rhs->y);
 };
@@ -51,6 +54,7 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 
 	const unsigned int nodes_per_side = 1 + (map->width / step);
 
+	// Allocate vectors
 	struct vector *node_vectors = (struct vector*) calloc(nodes_per_side * nodes_per_side, sizeof(struct vector));
 
 	// Would be nice if there were a nicer way that doesn't rely on integer counters
@@ -90,23 +94,25 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 			from_below_left.y = ((float) y - node_below_y) / step;
 
 			from_below_right.x = ((float) x - node_right_x) / step;
-			from_below_right.y = ((float) y - node_below_y) / step;
+			from_below_right.y = from_below_left.y;
 
-			from_above_left.x = ((float) x - node_left_x) / step;
+			from_above_left.x = from_below_left.x;
 			from_above_left.y = ((float) y - node_above_y) / step;
 
-			from_above_right.x = ((float) x - node_right_x) / step;
-			from_above_right.y = ((float) y - node_above_y) / step;
+			from_above_right.x = from_below_right.x;
+			from_above_right.y = from_above_left.y;
 
 			float s = dot_product(&node_vectors[vector_idx_below_left], &from_below_left);
 			float t = dot_product(&node_vectors[vector_idx_below_right], &from_below_right);
 			float u = dot_product(&node_vectors[vector_idx_above_left], &from_above_left);
 			float v = dot_product(&node_vectors[vector_idx_above_right], &from_above_right);
 
-			float bottom_pair_avg = decreasing_interpolant(from_above_left.x) * s + increasing_interpolant(from_above_left.x) * t;
-			float top_pair_avg = decreasing_interpolant(from_above_left.x) * u + increasing_interpolant(from_above_left.x) * v;
-			float sum = decreasing_interpolant(from_above_left.y) * top_pair_avg + increasing_interpolant(from_above_left.y) * bottom_pair_avg;
+			// Bottom means "greater Y"
+			float bottom_pair_avg = s + increasing_interpolant(from_above_left.x) * (t-s);
+			float top_pair_avg = u + increasing_interpolant(from_above_left.x) * (v-u);
+			float sum = bottom_pair_avg + increasing_interpolant(1- from_above_left.y) * (top_pair_avg - bottom_pair_avg);
 
+			/*
 			printf("\nPixel X/Y: %d/%d - SUM: %f (s: %f t: %f u:%f v:%f)\nNode to pixel vectors TL: (%f/%f) TR: (%f/%f) BL: (%f/%f) BR:(%f/%f)\nRandom node vectors TL: (%f/%f) TR: (%f/%f) BL: (%f/%f) BR: (%f/%f)\n",
 					x,
 					y,
@@ -120,6 +126,7 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 					node_vectors[vector_idx_below_left].x, node_vectors[vector_idx_below_left].y,
 					node_vectors[vector_idx_below_right].x, node_vectors[vector_idx_below_right].y
 			);
+			*/
 			if (sum < min)
 				min = sum;
 			if (sum > max)
@@ -149,14 +156,17 @@ void elevation_to_colour(float elevation, SDL_Colour *colour) {
 	 * Create a gradient between #000080 (Navy Blue) and #C19A6B ("Wood Brown")
 	 * if height<=0.5, else use a gradient between #C19A6B and white
 	 */
-	/*
-	colour->r = 0x00*(decreasing_interpolant(elevation)) + 0xC1*(increasing_interpolant(elevation));
-	colour->g = 0x00*(decreasing_interpolant(elevation)) + 0x9A*(increasing_interpolant(elevation));
-	colour->b = 0x80*(decreasing_interpolant(elevation)) + 0x6B*(increasing_interpolant(elevation));
-	*/
-	colour->r = 0xFF*(increasing_interpolant(elevation));
-	colour->g = 0xFF*(increasing_interpolant(elevation));
-	colour->b = 0xFF*(increasing_interpolant(elevation));
+	if (elevation <= 0.5) {
+		elevation *= 2;
+		colour->r = 0x00*(decreasing_interpolant(elevation)) + 0xC1*(increasing_interpolant(elevation));
+		colour->g = 0x00*(decreasing_interpolant(elevation)) + 0x9A*(increasing_interpolant(elevation));
+		colour->b = 0x80*(decreasing_interpolant(elevation)) + 0x6B*(increasing_interpolant(elevation));
+	} else {
+		elevation = (elevation - 0.5) * 2;
+		colour->r = 0xC1*(decreasing_interpolant(elevation)) + 0xFF*(increasing_interpolant(elevation));
+		colour->g = 0x9A*(decreasing_interpolant(elevation)) + 0xFF*(increasing_interpolant(elevation));
+		colour->b = 0x6B*(decreasing_interpolant(elevation)) + 0xFF*(increasing_interpolant(elevation));
+	};
 };
 
 void create_gradient_map(struct elevation_map *map) {
@@ -189,9 +199,10 @@ int main(int argc, char **argv) {
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
 
+	srand((unsigned int) time(NULL));
 	float min, max;
 
-	create_noise_map(&map, 16, &min, &max);
+	create_noise_map(&map, 32, &min, &max);
 	//create_gradient_map(&map);
 
 	height_map_surface = SDL_CreateRGBSurface(
@@ -223,7 +234,7 @@ int main(int argc, char **argv) {
 			((Uint32*) height_map_surface->pixels)[surf_y * height_map_surface->w + surf_x] = SDL_MapRGB(height_map_surface->format, pix_colour.r, pix_colour.g, pix_colour.b);
 		}
 	}
-	printf("min sum of dot products: %f | max sum of dot_products: %f\n", min, max);
+	printf("\n\n\nmin sum of dot products: %f | max sum of dot_products: %f\n", min, max);
 	printf("renderd min: %f | rendered_max: %f\n", rendered_min, rendered_max);
 
 	SDL_Init(SDL_INIT_VIDEO);
