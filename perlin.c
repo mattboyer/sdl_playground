@@ -4,8 +4,8 @@
 
 #include "SDL.h"
 
-#define NOISE_WIDTH		100
-#define NOISE_HEIGHT	100
+#define NOISE_WIDTH		200
+#define NOISE_HEIGHT	200
 
 #define M_PI			3.14159265358979323846
 
@@ -30,7 +30,6 @@ void random_unit_vector(struct vector *dest) {
 	float angle = ((float) rand() * 2 * M_PI) /  (RAND_MAX);
 	dest->x = cos(angle);
 	dest->y = sin(angle);
-	//printf("random x=%f y=%f length=%f\n", dest->x, dest->y, (dest->x * dest->x) + (dest->y * dest->y));
 };
 
 float ease(float x) {
@@ -44,7 +43,6 @@ float dot_product(const struct vector *lhs, const struct vector *rhs) {
 	 * the product is 
 	 * -2 width^2 <=prod <= 2 width^2
 	 */
-	//printf("Dot product of (%f,%f) and (%f,%f)\n", lhs.x, lhs.y, rhs.x, rhs.y);
 	return (lhs->x * rhs->x) + (lhs->y * rhs->y);
 };
 
@@ -66,7 +64,6 @@ void draw_noise(SDL_Surface *surface, const unsigned int step) {
 	assert((surface->w) % step == 0);
 
 	const unsigned int nodes_per_side = 1 + (surface->w / step);
-	printf("surface side=%d step=%d nodes_per_side %d\n", surface->w, step, nodes_per_side);
 
 	// There'll be (surface->side/step + 1) ^ 2 nodes in the grid
 	struct vector *node_vectors = (struct vector*) calloc(nodes_per_side * nodes_per_side, sizeof(struct vector));
@@ -104,17 +101,10 @@ void draw_noise(SDL_Surface *surface, const unsigned int step) {
 			node_below_left = &node_vectors[(segment_y + 1) * nodes_per_side + segment_x];
 			node_below_right = &node_vectors[(segment_y + 1) * nodes_per_side + (segment_x + 1)];
 
-			//printf("x=%d y=%d segment_x=%d segment_y=%d\n", x, y, segment_x, segment_y);
-
 			unsigned int node_left_x = segment_x * step;
 			unsigned int node_right_x = node_left_x + step;
 			unsigned int node_above_y = segment_y * step;
 			unsigned int node_below_y = node_above_y + step;
-			/*
-			printf("left x %d, right x %d | above y %d, below_y %d\n", node_left_x, node_right_x, node_above_y, node_below_y);
-			printf("above left (%f,%f) below left(%f,%f)\n", node_above_left->x, node_above_left->y, node_below_left->x, node_below_left->y);
-			printf("above right (%f,%f) below right(%f,%f)\n", node_above_right->x, node_above_right->y, node_below_right->x, node_below_right->y);
-			*/
 
 			from_below_left.x = ((float) x - node_left_x) / step;
 			from_below_left.y = ((float) y - node_below_y) / step;
@@ -128,18 +118,12 @@ void draw_noise(SDL_Surface *surface, const unsigned int step) {
 			from_above_right.x = ((float) x - node_right_x) / step;
 			from_above_right.y = ((float) y - node_above_y) / step;
 
-			/*
-			printf("from above left (%f,%f) from above right(%f,%f)\n", from_above_left.x, from_above_left.y, from_above_right.x, from_above_right.y);
-			*/
-
 			float s = dot_product(node_below_left, &from_below_left);
 			float t = dot_product(node_below_right, &from_below_right);
 			float u = dot_product(node_above_left, &from_above_left);
 			float v = dot_product(node_above_right, &from_above_right);
 
-			float raw_avg = (s+t+u+v) / 4;
 			float sx_weight = ease(from_above_left.x);
-			//printf("x-x0: %f y-y0: %f\n", from_above_left.x, from_above_left.y);
 			float a = s + sx_weight*(t-s);
 			float b = u + sx_weight*(v-u);
 
@@ -147,7 +131,6 @@ void draw_noise(SDL_Surface *surface, const unsigned int step) {
 			float sy_weight = ease(1 - from_above_left.y);
 			float z = a + sy_weight*(b-a);
 
-			//printf("X=%d Y=%d s=%f t=%f u=%f v=%f avg=%f\n", x, y, s, t, u, v, raw_avg);
 			unsigned int noise_idx = (unsigned int) 128 + (z * 128);
 			((Uint8*) surface->pixels)[y * surface->w + x] = (Uint8) noise_idx;
 		}
