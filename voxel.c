@@ -7,8 +7,8 @@
 #include "SDL.h"
 
 #define M_PI			3.14159265358979323846
-#define TERRAIN_WIDTH	128
-#define TERRAIN_HEIGHT	128
+#define TERRAIN_WIDTH	400
+#define TERRAIN_HEIGHT	400
 
 struct vector {
 	// TODO Use ints
@@ -107,10 +107,9 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 			float u = dot_product(&node_vectors[vector_idx_above_left], &from_above_left);
 			float v = dot_product(&node_vectors[vector_idx_above_right], &from_above_right);
 
-			// Bottom means "greater Y"
-			float bottom_pair_avg = s + increasing_interpolant(from_above_left.x) * (t-s);
-			float top_pair_avg = u + increasing_interpolant(from_above_left.x) * (v-u);
-			float sum = bottom_pair_avg + increasing_interpolant(1- from_above_left.y) * (top_pair_avg - bottom_pair_avg);
+			float bottom_pair_avg = decreasing_interpolant(from_above_left.x) * s + increasing_interpolant(from_above_left.x) * t;
+			float top_pair_avg = decreasing_interpolant(from_above_left.x) * u + increasing_interpolant(from_above_left.x) * v;
+			float sum = decreasing_interpolant(from_above_left.y) * top_pair_avg + increasing_interpolant(from_above_left.y) * bottom_pair_avg;
 
 			/*
 			printf("\nPixel X/Y: %d/%d - SUM: %f (s: %f t: %f u:%f v:%f)\nNode to pixel vectors TL: (%f/%f) TR: (%f/%f) BL: (%f/%f) BR:(%f/%f)\nRandom node vectors TL: (%f/%f) TR: (%f/%f) BL: (%f/%f) BR: (%f/%f)\n",
@@ -131,19 +130,9 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 				min = sum;
 			if (sum > max)
 				max = sum;
+			// TODO Should we normalise here? That would probably require a
+			// second pass
 			map->elevations[y][x] = sum;
-
-			/*
-			float sx_weight = decreasing_interpolant(from_above_left.x);
-			float bottom_pair_avg = s + sx_weight*(t-s);
-			float top_pair_avg = u + sx_weight*(v-u);
-
-			float sy_weight = decreasing_interpolant(1- from_above_left.y);
-			//float z = top_pair_avg + sy_weight * (bottom_pair_avg - top_pair_avg);
-			float z = top_pair_avg + sy_weight * (bottom_pair_avg - top_pair_avg);
-			z = (z+1)/1.5;
-			map->elevations[y][x] = z;
-			*/
 		}
 	}
 	free(node_vectors);
@@ -169,23 +158,6 @@ void elevation_to_colour(float elevation, SDL_Colour *colour) {
 	};
 };
 
-void create_gradient_map(struct elevation_map *map) {
-
-	assert(map->width == map->height);
-
-	unsigned int x, y;
-	for(y=0; y < map->height; ++y) {
-		float y_base = (float) y / map->height;
-
-		for(x=0; x < map->width; ++x) {
-			float x_base = (float) x / map->width;
-
-			map->elevations[y][x] = (x_base +y_base)/2;
-		}
-	}
-};
-
-
 int main(int argc, char **argv) {
 	SDL_Window *window;
 
@@ -202,8 +174,7 @@ int main(int argc, char **argv) {
 	srand((unsigned int) time(NULL));
 	float min, max;
 
-	create_noise_map(&map, 32, &min, &max);
-	//create_gradient_map(&map);
+	create_noise_map(&map, 50, &min, &max);
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,
@@ -213,8 +184,6 @@ int main(int argc, char **argv) {
 		0, 0, 0, 0
 	);
 
-	float rendered_min, rendered_max;
-	rendered_min = rendered_max = 0;
 	// This rendering routine is correct!
 	unsigned int surf_x, surf_y;
 	SDL_Colour pix_colour;
@@ -225,17 +194,11 @@ int main(int argc, char **argv) {
 			pix_z += fabs(min);
 			pix_z /= (max + fabs(min));
 
-			if (pix_z < rendered_min)
-				rendered_min = pix_z;
-			if (pix_z > rendered_max)
-				rendered_max = pix_z;
-
 			elevation_to_colour(pix_z, &pix_colour);
 			((Uint32*) height_map_surface->pixels)[surf_y * height_map_surface->w + surf_x] = SDL_MapRGB(height_map_surface->format, pix_colour.r, pix_colour.g, pix_colour.b);
 		}
 	}
 	printf("\n\n\nmin sum of dot products: %f | max sum of dot_products: %f\n", min, max);
-	printf("renderd min: %f | rendered_max: %f\n", rendered_min, rendered_max);
 
 	SDL_Init(SDL_INIT_VIDEO);
 
