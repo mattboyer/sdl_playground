@@ -16,6 +16,17 @@ struct vector {
 	float y;
 };
 
+struct gradient {
+	float min;
+	float max;
+	Uint8 min_r;
+	Uint8 min_g;
+	Uint8 min_b;
+	Uint8 max_r;
+	Uint8 max_g;
+	Uint8 max_b;
+};
+
 struct elevation_map {
 	unsigned int width;
 	unsigned int height;
@@ -140,22 +151,23 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 	*max_sum = max;
 };
 
-void elevation_to_colour(float elevation, SDL_Colour *colour) {
+void elevation_to_colour(float elevation, struct gradient *gradients, SDL_Colour *colour) {
 	/*
-	 * Create a gradient between #000080 (Navy Blue) and #C19A6B ("Wood Brown")
-	 * if height<=0.5, else use a gradient between #C19A6B and white
+	 * It is assumed that the array of gradients is sorted
 	 */
-	if (elevation <= 0.5) {
-		elevation *= 2;
-		colour->r = 0x00*(decreasing_interpolant(elevation)) + 0xC1*(increasing_interpolant(elevation));
-		colour->g = 0x00*(decreasing_interpolant(elevation)) + 0x9A*(increasing_interpolant(elevation));
-		colour->b = 0x80*(decreasing_interpolant(elevation)) + 0x6B*(increasing_interpolant(elevation));
-	} else {
-		elevation = (elevation - 0.5) * 2;
-		colour->r = 0xC1*(decreasing_interpolant(elevation)) + 0xFF*(increasing_interpolant(elevation));
-		colour->g = 0x9A*(decreasing_interpolant(elevation)) + 0xFF*(increasing_interpolant(elevation));
-		colour->b = 0x6B*(decreasing_interpolant(elevation)) + 0xFF*(increasing_interpolant(elevation));
+	struct gradient *elevation_gradient;
+	unsigned int gradient_idx=0;
+	while (elevation_gradient = &gradients[gradient_idx]) {
+		if (elevation >= elevation_gradient->min && elevation <= elevation_gradient->max)
+			break;
+		gradient_idx++;
 	};
+
+	// Normalise the elevation relative to the elevation_gradient
+	float gradient = (elevation - elevation_gradient->min) / (elevation_gradient->max - elevation_gradient->min);
+	colour->r = elevation_gradient->min_r * decreasing_interpolant(gradient) + elevation_gradient->max_r * increasing_interpolant(gradient);
+	colour->g = elevation_gradient->min_g * decreasing_interpolant(gradient) + elevation_gradient->max_g * increasing_interpolant(gradient);
+	colour->b = elevation_gradient->min_b * decreasing_interpolant(gradient) + elevation_gradient->max_b * increasing_interpolant(gradient);
 };
 
 int main(int argc, char **argv) {
@@ -171,10 +183,11 @@ int main(int argc, char **argv) {
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
 
+
 	srand((unsigned int) time(NULL));
 	float min, max;
 
-	create_noise_map(&map, 50, &min, &max);
+	create_noise_map(&map, 100, &min, &max);
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,
@@ -183,6 +196,47 @@ int main(int argc, char **argv) {
 		32,
 		0, 0, 0, 0
 	);
+
+	struct gradient colour_gradients[4];
+	colour_gradients[0] = (struct gradient) {
+		.min=0.,
+		.max=0.3,
+		.min_r = 0x00,
+		.min_g = 0x00,
+		.min_b = 0x80,
+		.max_r = 0xC1,
+		.max_g = 0x9A,
+		.max_b = 0x6B,
+	};
+
+	colour_gradients[1] = (struct gradient) {
+		.min=0.3,
+		.max=0.85,
+		.min_r = 0xC1,
+		.min_g = 0x9A,
+		.min_b = 0x6B,
+		.max_r = 0x22,
+		.max_g = 0x8B,
+		.max_b = 0x22,
+	};
+
+	colour_gradients[2].min=0.85;
+	colour_gradients[2].max=0.95;
+	colour_gradients[2].min_r = 0x22;
+	colour_gradients[2].min_g = 0x8B;
+	colour_gradients[2].min_b = 0x22;
+	colour_gradients[2].max_r = 0xC8;
+	colour_gradients[2].max_g = 0xC8;
+	colour_gradients[2].max_b = 0xC8;
+
+	colour_gradients[3].min=0.95;
+	colour_gradients[3].max=1.0;
+	colour_gradients[3].min_r = 0xC8;
+	colour_gradients[3].min_g = 0xC8;
+	colour_gradients[3].min_b = 0xC8;
+	colour_gradients[3].max_r = 0xFF;
+	colour_gradients[3].max_g = 0xFF;
+	colour_gradients[3].max_b = 0xFF;
 
 	// This rendering routine is correct!
 	unsigned int surf_x, surf_y;
@@ -194,11 +248,10 @@ int main(int argc, char **argv) {
 			pix_z += fabs(min);
 			pix_z /= (max + fabs(min));
 
-			elevation_to_colour(pix_z, &pix_colour);
+			elevation_to_colour(pix_z, colour_gradients, &pix_colour);
 			((Uint32*) height_map_surface->pixels)[surf_y * height_map_surface->w + surf_x] = SDL_MapRGB(height_map_surface->format, pix_colour.r, pix_colour.g, pix_colour.b);
 		}
 	}
-	printf("\n\n\nmin sum of dot products: %f | max sum of dot_products: %f\n", min, max);
 
 	SDL_Init(SDL_INIT_VIDEO);
 
