@@ -1,37 +1,4 @@
-#include <math.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <assert.h>
-#include <time.h>
-
-#include "SDL.h"
-
-#define M_PI			3.14159265358979323846
-#define TERRAIN_WIDTH	400
-#define TERRAIN_HEIGHT	400
-
-struct vector {
-	// TODO Use ints
-	float x;
-	float y;
-};
-
-struct gradient {
-	float min;
-	float max;
-	Uint8 min_r;
-	Uint8 min_g;
-	Uint8 min_b;
-	Uint8 max_r;
-	Uint8 max_g;
-	Uint8 max_b;
-};
-
-struct elevation_map {
-	unsigned int width;
-	unsigned int height;
-	float elevations[TERRAIN_HEIGHT][TERRAIN_WIDTH];
-};
+#include "voxel.h"
 
 void random_unit_vector(struct vector *dest) {
 	float angle = ((float) rand() * 2 * M_PI) / (RAND_MAX);
@@ -170,6 +137,46 @@ void elevation_to_colour(float elevation, struct gradient *gradients, SDL_Colour
 	colour->b = elevation_gradient->min_b * decreasing_interpolant(gradient) + elevation_gradient->max_b * increasing_interpolant(gradient);
 };
 
+void render_map(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
+	unsigned int map_x, map_y;
+	map_x = (unsigned int) position->x;
+	map_y = (unsigned int) position->y;
+
+	SDL_Texture *target;
+	int target_w, target_h;
+	target = SDL_GetRenderTarget(renderer);
+	SDL_QueryTexture(target, NULL, NULL, &target_w, &target_h);
+
+	//TODO Draw a better sky
+	SDL_SetRenderDrawColor(renderer, 0x77, 0xB5, 0xFE, SDL_ALPHA_OPAQUE);
+	SDL_RenderClear(renderer);
+
+	// That's for the furthest line from the camera
+	unsigned int rectangles_per_row = 100;
+	int rectangle_y_on_map, rectangle_idx;
+	for (rectangle_y_on_map=map_y-depth; rectangle_y_on_map <= map_y; ++rectangle_y_on_map) {
+		float highest_peak_factor = HIGHEST_PEAK_TO_HEIGHT;
+		for (rectangle_idx=0; rectangle_idx<rectangles_per_row; ++rectangle_idx) {
+			unsigned int rectangle_x_on_map = map_x + rectangle_idx - rectangles_per_row/2;
+
+			//TODO draw gradients instead of single-colour rectangles
+			SDL_Colour rectangle_colour;
+			elevation_to_colour(map->elevations[rectangle_y_on_map][rectangle_x_on_map], map->colour_ramp, &rectangle_colour);
+			SDL_SetRenderDrawColor(renderer, rectangle_colour.r, rectangle_colour.g, rectangle_colour.b, rectangle_colour.a);
+
+			SDL_Rect voxel_rect = {
+				.x = rectangle_idx * (target_w/rectangles_per_row),
+				.y = target_h * (1 - highest_peak_factor * map->elevations[rectangle_y_on_map][rectangle_x_on_map]),
+				.w = (target_w/rectangles_per_row),
+				.h = target_h * highest_peak_factor * (map->elevations[rectangle_y_on_map][rectangle_x_on_map]),
+			};
+			SDL_RenderFillRect(renderer, &voxel_rect);
+		};
+		rectangles_per_row-=5;
+	};
+};
+
+
 int main(int argc, char **argv) {
 	SDL_Window *window;
 
@@ -177,7 +184,8 @@ int main(int argc, char **argv) {
 
 	SDL_Surface *height_map_surface;
 
-	SDL_Texture *source_texture;
+	SDL_Texture *map_texture;
+	SDL_Texture *terrain_texture;
 
 	struct elevation_map map;
 	map.width = TERRAIN_WIDTH;
@@ -197,34 +205,36 @@ int main(int argc, char **argv) {
 		0, 0, 0, 0
 	);
 
+	// TODO Refactor the gradients
 	struct gradient colour_gradients[4];
+	map.colour_ramp = colour_gradients;
 	colour_gradients[0] = (struct gradient) {
 		.min=0.,
 		.max=0.3,
 		.min_r = 0x00,
 		.min_g = 0x00,
 		.min_b = 0x80,
-		.max_r = 0xC1,
-		.max_g = 0x9A,
-		.max_b = 0x6B,
-	};
-
-	colour_gradients[1] = (struct gradient) {
-		.min=0.3,
-		.max=0.85,
-		.min_r = 0xC1,
-		.min_g = 0x9A,
-		.min_b = 0x6B,
 		.max_r = 0x22,
 		.max_g = 0x8B,
 		.max_b = 0x22,
 	};
 
+	colour_gradients[1] = (struct gradient) {
+		.min=0.3,
+		.max=0.85,
+		.min_r = 0x22,
+		.min_g = 0x8B,
+		.min_b = 0x22,
+		.max_r = 0xC1,
+		.max_g = 0x9A,
+		.max_b = 0x6B,
+	};
+
 	colour_gradients[2].min=0.85;
 	colour_gradients[2].max=0.95;
-	colour_gradients[2].min_r = 0x22;
-	colour_gradients[2].min_g = 0x8B;
-	colour_gradients[2].min_b = 0x22;
+	colour_gradients[2].min_r = 0xC1;
+	colour_gradients[2].min_g = 0x9A;
+	colour_gradients[2].min_b = 0x6B;
 	colour_gradients[2].max_r = 0xC8;
 	colour_gradients[2].max_g = 0xC8;
 	colour_gradients[2].max_b = 0xC8;
@@ -243,12 +253,13 @@ int main(int argc, char **argv) {
 	SDL_Colour pix_colour;
 	for(surf_y = 0; surf_y < height_map_surface->h; ++surf_y) {
 		for(surf_x = 0; surf_x < height_map_surface->w; ++surf_x) {
-			float pix_z = map.elevations[surf_y][surf_x];
+			float normalised_z = map.elevations[surf_y][surf_x];
 			// Normalise the values to be 0 <= x <= 1
-			pix_z += fabs(min);
-			pix_z /= (max + fabs(min));
+			normalised_z += fabs(min);
+			normalised_z /= (max + fabs(min));
+			map.elevations[surf_y][surf_x] = normalised_z;
 
-			elevation_to_colour(pix_z, colour_gradients, &pix_colour);
+			elevation_to_colour(normalised_z, colour_gradients, &pix_colour);
 			((Uint32*) height_map_surface->pixels)[surf_y * height_map_surface->w + surf_x] = SDL_MapRGB(height_map_surface->format, pix_colour.r, pix_colour.g, pix_colour.b);
 		}
 	}
@@ -259,8 +270,8 @@ int main(int argc, char **argv) {
 		"Voxel",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
-		height_map_surface->w,
-		height_map_surface->h,
+		WINDOW_WIDTH,
+		WINDOW_HEIGHT,
 		0
 	);
 	SDL_ShowCursor(false);
@@ -271,8 +282,20 @@ int main(int argc, char **argv) {
 		SDL_RENDERER_PRESENTVSYNC|SDL_RENDERER_ACCELERATED
 	);
 
+	struct vector camera_position = {
+		.x=map.width/2,
+		.y=3*map.height/4,
+	};
+
+	terrain_texture = SDL_CreateTexture(
+		renderer,
+		height_map_surface->format->format,
+		SDL_TEXTUREACCESS_TARGET,
+		600,
+		600
+	);
+
 	bool running = true;
-	//unsigned int time = 0;
 	while (running) {
 
 		// At this stage, the rough idea is to have a surface(texture???)
@@ -288,13 +311,33 @@ int main(int argc, char **argv) {
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, SDL_ALPHA_OPAQUE);
 		SDL_RenderClear(renderer);
 
-		source_texture = SDL_CreateTextureFromSurface(
+		SDL_SetRenderTarget(renderer, terrain_texture);
+		render_map(renderer, &map, &camera_position, 10);
+		SDL_SetRenderTarget(renderer, NULL);
+		SDL_RenderCopy(renderer, terrain_texture, NULL, NULL);
+
+		/* Copy the 2D top-down map surface to the top-left corner
+		 */
+		map_texture = SDL_CreateTextureFromSurface(
 			renderer,
 			height_map_surface
 		);
-
-		SDL_RenderCopy(renderer, source_texture, NULL, NULL);
-		SDL_DestroyTexture(source_texture);
+		SDL_Rect map_rect = {
+			.x=0,
+			.y=0,
+			.w=height_map_surface->w,
+			.h=height_map_surface->h,
+		};
+		SDL_Rect camera_rect = {
+			.x=camera_position.x-1,
+			.y=camera_position.y-1,
+			.w=2,
+			.h=2,
+		};
+		SDL_RenderCopy(renderer, map_texture, NULL, &map_rect);
+		SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, SDL_ALPHA_OPAQUE);
+		SDL_RenderFillRect(renderer, &camera_rect);
+		SDL_DestroyTexture(map_texture);
 
 		// Causes the renderer to push whatever it's done since last time
 		// to the window it's tied to
@@ -305,8 +348,23 @@ int main(int argc, char **argv) {
 			if (SDL_QUIT == event.type)
 				running = false;
 			if (SDL_KEYDOWN == event.type) {
-				if (event.key.keysym.sym == SDLK_q)
-					running = false;
+				switch (event.key.keysym.sym) {
+					case SDLK_q:
+						running = false;
+						break;
+					case SDLK_UP:
+						camera_position.y-=1;
+						break;
+					case SDLK_DOWN:
+						camera_position.y+=1;
+						break;
+					case SDLK_LEFT:
+						camera_position.x-=1;
+						break;
+					case SDLK_RIGHT:
+						camera_position.x+=1;
+						break;
+				};
 			}
 		}
 	}
