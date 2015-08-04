@@ -63,22 +63,22 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 			unsigned int node_above_y = segment_y * step;
 			unsigned int node_below_y = node_above_y + step;
 
-			struct vector from_below_left = (struct vector) {
+			struct vector from_below_left = {
 				.x = ((float) x - node_left_x) / step,
 				.y = ((float) y - node_below_y) / step,
 			};
 
-			struct vector from_below_right = (struct vector) {
+			struct vector from_below_right = {
 				.x = ((float) x - node_right_x) / step,
 				.y = from_below_left.y,
 			};
 
-			struct vector from_above_left = (struct vector) {
+			struct vector from_above_left = {
 				.x = from_below_left.x,
 				.y = ((float) y - node_above_y) / step,
 			};
 
-			struct vector from_above_right = (struct vector) {
+			struct vector from_above_right = {
 				.x = from_below_right.x,
 				.y = from_above_left.y,
 			};
@@ -92,21 +92,6 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 			float top_pair_avg = decreasing_interpolant(from_above_left.x) * u + increasing_interpolant(from_above_left.x) * v;
 			float sum = decreasing_interpolant(from_above_left.y) * top_pair_avg + increasing_interpolant(from_above_left.y) * bottom_pair_avg;
 
-			/*
-			printf("\nPixel X/Y: %d/%d - SUM: %f (s: %f t: %f u:%f v:%f)\nNode to pixel vectors TL: (%f/%f) TR: (%f/%f) BL: (%f/%f) BR:(%f/%f)\nRandom node vectors TL: (%f/%f) TR: (%f/%f) BL: (%f/%f) BR: (%f/%f)\n",
-					x,
-					y,
-					sum, s, t, u, v,
-					from_above_left.x, from_above_left.y,
-					from_above_right.x, from_above_right.y,
-					from_below_left.x, from_below_left.y,
-					from_below_right.x, from_below_right.y,
-					node_vectors[vector_idx_above_left].x, node_vectors[vector_idx_above_left].y,
-					node_vectors[vector_idx_above_right].x, node_vectors[vector_idx_above_right].y,
-					node_vectors[vector_idx_below_left].x, node_vectors[vector_idx_below_left].y,
-					node_vectors[vector_idx_below_right].x, node_vectors[vector_idx_below_right].y
-			);
-			*/
 			if (sum < min)
 				min = sum;
 			if (sum > max)
@@ -224,12 +209,15 @@ int main(int argc, char **argv) {
 	SDL_Texture *map_texture;
 	SDL_Texture *terrain_texture;
 
+	srand((unsigned int) time(NULL));
+
+	struct gradient colour_gradients[4];
+
 	struct elevation_map map;
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
+	map.colour_ramp = colour_gradients;
 
-
-	srand((unsigned int) time(NULL));
 	float min, max;
 
 	create_noise_map(&map, 100, &min, &max);
@@ -244,8 +232,6 @@ int main(int argc, char **argv) {
 	);
 
 	// TODO Refactor the gradients
-	struct gradient colour_gradients[4];
-	map.colour_ramp = colour_gradients;
 	colour_gradients[0] = (struct gradient) {
 		.min=0.,
 		.max=0.3,
