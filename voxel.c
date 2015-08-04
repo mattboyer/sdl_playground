@@ -41,11 +41,6 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 		for(node_x = 0; node_x < nodes_per_side; ++node_x)
 			random_unit_vector(&node_vectors[node_y * nodes_per_side + node_x]);
 
-	struct vector from_above_left;
-	struct vector from_above_right;
-	struct vector from_below_left;
-	struct vector from_below_right;
-
 	float min, max;
 	min=max=0;
 
@@ -68,17 +63,25 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 			unsigned int node_above_y = segment_y * step;
 			unsigned int node_below_y = node_above_y + step;
 
-			from_below_left.x = ((float) x - node_left_x) / step;
-			from_below_left.y = ((float) y - node_below_y) / step;
+			struct vector from_below_left = (struct vector) {
+				.x = ((float) x - node_left_x) / step,
+				.y = ((float) y - node_below_y) / step,
+			};
 
-			from_below_right.x = ((float) x - node_right_x) / step;
-			from_below_right.y = from_below_left.y;
+			struct vector from_below_right = (struct vector) {
+				.x = ((float) x - node_right_x) / step,
+				.y = from_below_left.y,
+			};
 
-			from_above_left.x = from_below_left.x;
-			from_above_left.y = ((float) y - node_above_y) / step;
+			struct vector from_above_left = (struct vector) {
+				.x = from_below_left.x,
+				.y = ((float) y - node_above_y) / step,
+			};
 
-			from_above_right.x = from_below_right.x;
-			from_above_right.y = from_above_left.y;
+			struct vector from_above_right = (struct vector) {
+				.x = from_below_right.x,
+				.y = from_above_left.y,
+			};
 
 			float s = dot_product(&node_vectors[vector_idx_below_left], &from_below_left);
 			float t = dot_product(&node_vectors[vector_idx_below_right], &from_below_right);
@@ -108,7 +111,6 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 				min = sum;
 			if (sum > max)
 				max = sum;
-			// TODO Should we normalise here? That would probably require a
 			// second pass
 			map->elevations[y][x] = sum;
 		}
@@ -118,13 +120,27 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 	*max_sum = max;
 };
 
+void normalise_map(struct elevation_map *map, const float min, const float max) {
+	unsigned int map_x, map_y;
+
+	for (map_y = 0; map_y < map->height; ++map_y) {
+		for (map_x = 0; map_x < map->width; ++map_x) {
+			float normalised_z = map->elevations[map_y][map_x];
+			// Normalise the values to be 0 <= x <= 1
+			normalised_z += fabs(min);
+			normalised_z /= (max + fabs(min));
+			map->elevations[map_y][map_x] = normalised_z;
+		};
+	};
+};
+
 void elevation_to_colour(float elevation, struct gradient *gradients, SDL_Colour *colour) {
 	/*
 	 * It is assumed that the array of gradients is sorted
 	 */
 	struct gradient *elevation_gradient;
 	unsigned int gradient_idx=0;
-	while (elevation_gradient = &gradients[gradient_idx]) {
+	while ((elevation_gradient = &gradients[gradient_idx])) {
 		if (elevation >= elevation_gradient->min && elevation <= elevation_gradient->max)
 			break;
 		gradient_idx++;
@@ -137,7 +153,7 @@ void elevation_to_colour(float elevation, struct gradient *gradients, SDL_Colour
 	colour->b = elevation_gradient->min_b * decreasing_interpolant(gradient) + elevation_gradient->max_b * increasing_interpolant(gradient);
 };
 
-void render_map(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
+void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
 	unsigned int map_x, map_y;
 	map_x = (unsigned int) position->x;
 	map_y = (unsigned int) position->y;
@@ -172,10 +188,31 @@ void render_map(SDL_Renderer *renderer, const struct elevation_map *map, const s
 			};
 			SDL_RenderFillRect(renderer, &voxel_rect);
 		};
-		rectangles_per_row-=5;
+		rectangles_per_row-=2;
 	};
 };
 
+void render_top_down_map(SDL_Surface *map_surface, struct elevation_map *map) {
+	unsigned int surf_x, surf_y;
+	SDL_Colour pix_colour;
+	for (surf_y = 0; surf_y < map_surface->h; ++surf_y) {
+		for (surf_x = 0; surf_x < map_surface->w; ++surf_x) {
+
+			elevation_to_colour(
+				map->elevations[surf_y][surf_x],
+				map->colour_ramp,
+				&pix_colour
+			);
+
+			((Uint32*) map_surface->pixels)[surf_y * map_surface->w + surf_x] = SDL_MapRGB(
+				map_surface->format,
+				pix_colour.r,
+				pix_colour.g,
+				pix_colour.b
+			);
+		}
+	}
+};
 
 int main(int argc, char **argv) {
 	SDL_Window *window;
@@ -196,6 +233,7 @@ int main(int argc, char **argv) {
 	float min, max;
 
 	create_noise_map(&map, 100, &min, &max);
+	normalise_map(&map, min, max);
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,
@@ -248,21 +286,8 @@ int main(int argc, char **argv) {
 	colour_gradients[3].max_g = 0xFF;
 	colour_gradients[3].max_b = 0xFF;
 
-	// This rendering routine is correct!
-	unsigned int surf_x, surf_y;
-	SDL_Colour pix_colour;
-	for(surf_y = 0; surf_y < height_map_surface->h; ++surf_y) {
-		for(surf_x = 0; surf_x < height_map_surface->w; ++surf_x) {
-			float normalised_z = map.elevations[surf_y][surf_x];
-			// Normalise the values to be 0 <= x <= 1
-			normalised_z += fabs(min);
-			normalised_z /= (max + fabs(min));
-			map.elevations[surf_y][surf_x] = normalised_z;
-
-			elevation_to_colour(normalised_z, colour_gradients, &pix_colour);
-			((Uint32*) height_map_surface->pixels)[surf_y * height_map_surface->w + surf_x] = SDL_MapRGB(height_map_surface->format, pix_colour.r, pix_colour.g, pix_colour.b);
-		}
-	}
+	// This needs to be done *AFTER* the map's colour ramp has been defined
+	render_top_down_map(height_map_surface, &map);
 
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -291,8 +316,8 @@ int main(int argc, char **argv) {
 		renderer,
 		height_map_surface->format->format,
 		SDL_TEXTUREACCESS_TARGET,
-		600,
-		600
+		WINDOW_WIDTH,
+		WINDOW_HEIGHT
 	);
 
 	bool running = true;
@@ -312,7 +337,7 @@ int main(int argc, char **argv) {
 		SDL_RenderClear(renderer);
 
 		SDL_SetRenderTarget(renderer, terrain_texture);
-		render_map(renderer, &map, &camera_position, 10);
+		render_terrain(renderer, &map, &camera_position, 20);
 		SDL_SetRenderTarget(renderer, NULL);
 		SDL_RenderCopy(renderer, terrain_texture, NULL, NULL);
 
@@ -337,7 +362,6 @@ int main(int argc, char **argv) {
 		SDL_RenderCopy(renderer, map_texture, NULL, &map_rect);
 		SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, SDL_ALPHA_OPAQUE);
 		SDL_RenderFillRect(renderer, &camera_rect);
-		SDL_DestroyTexture(map_texture);
 
 		// Causes the renderer to push whatever it's done since last time
 		// to the window it's tied to
@@ -371,6 +395,8 @@ int main(int argc, char **argv) {
 
 	SDL_FreeSurface(height_map_surface);
 	SDL_DestroyRenderer(renderer);
+	SDL_DestroyTexture(map_texture);
+	SDL_DestroyTexture(terrain_texture);
 	SDL_DestroyWindow(window);
 
 	SDL_Quit();

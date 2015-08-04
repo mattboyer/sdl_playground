@@ -10,8 +10,8 @@
 #define TERRAIN_WIDTH	200
 #define TERRAIN_HEIGHT	200
 
-#define WINDOW_HEIGHT	600
 #define WINDOW_WIDTH	600
+#define WINDOW_HEIGHT	600
 
 #define HIGHEST_PEAK_TO_HEIGHT	0.8
 
@@ -53,4 +53,8 @@ void create_noise_map(struct elevation_map *, const unsigned int, float*, float*
 
 void elevation_to_colour(float, struct gradient*, SDL_Colour*);
 
-void render_map(SDL_Renderer*, const struct elevation_map*, const struct vector*, const unsigned int);
+void render_terrain(SDL_Renderer*, const struct elevation_map*, const struct vector*, const unsigned int);
+
+void render_top_down_map(SDL_Surface*, struct elevation_map*);
+
+void normalise_map(struct elevation_map*, const float, const float);
