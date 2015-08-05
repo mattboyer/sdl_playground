@@ -214,14 +214,8 @@ int main(int argc, char **argv) {
 	struct elevation_map map;
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
-	map.colour_ramp = (struct gradient*) calloc(4, sizeof(struct gradient));
-
-	float min, max;
-
-	create_noise_map(&map, (map.width/2), &min, &max);
-	normalise_map(&map, min, max);
-
 	// TODO Refactor the gradients
+	map.colour_ramp = (struct gradient*) calloc(4, sizeof(struct gradient));
 	map.colour_ramp[0] = (struct gradient) {
 		.min=0.,
 		.max=0.3,
@@ -250,6 +244,9 @@ int main(int argc, char **argv) {
 		.max_colour={.r=0xFF, .g=0xFF, .b=0xFF, .a=0x00},
 	};
 
+	float min, max;
+	create_noise_map(&map, (map.width/2), &min, &max);
+	normalise_map(&map, min, max);
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,
