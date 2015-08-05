@@ -6,14 +6,14 @@ void random_unit_vector(struct vector *dest) {
 	dest->y = sin(angle);
 };
 
-float increasing_interpolant(float x) {
+inline float increasing_interpolant(float x) {
 	// x=0 -> 0
 	// x=1 -> 1
 	// x=0.5 -> 0.5
 	return 3 * pow(x, 2) - 2 * pow(x, 3);
 };
 
-float decreasing_interpolant(float x) {
+inline float decreasing_interpolant(float x) {
 	return 1 - increasing_interpolant(x);
 };
 
@@ -49,6 +49,9 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 	for(y=0; y < map->height; ++y) {
 		segment_y = y / step;
 
+		unsigned int node_above_y = segment_y * step;
+		unsigned int node_below_y = node_above_y + step;
+
 		for(x=0; x < map->width; ++x) {
 			segment_x = x / step;
 
@@ -60,8 +63,6 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 
 			unsigned int node_left_x = segment_x * step;
 			unsigned int node_right_x = node_left_x + step;
-			unsigned int node_above_y = segment_y * step;
-			unsigned int node_below_y = node_above_y + step;
 
 			struct vector from_below_left = {
 				.x = ((float) x - node_left_x) / step,
@@ -209,20 +210,19 @@ int main(int argc, char **argv) {
 
 	srand((unsigned int) time(NULL));
 
-	struct gradient colour_gradients[4];
 
 	struct elevation_map map;
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
-	map.colour_ramp = colour_gradients;
+	map.colour_ramp = (struct gradient*) calloc(4, sizeof(struct gradient));
 
 	float min, max;
 
-	create_noise_map(&map, 100, &min, &max);
+	create_noise_map(&map, (map.width/2), &min, &max);
 	normalise_map(&map, min, max);
 
 	// TODO Refactor the gradients
-	colour_gradients[0] = (struct gradient) {
+	map.colour_ramp[0] = (struct gradient) {
 		.min=0.,
 		.max=0.3,
 		.min_r = 0x00,
@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
 		.max_b = 0x22,
 	};
 
-	colour_gradients[1] = (struct gradient) {
+	map.colour_ramp[1] = (struct gradient) {
 		.min=0.3,
 		.max=0.85,
 		.min_r = 0x22,
@@ -244,23 +244,23 @@ int main(int argc, char **argv) {
 		.max_b = 0x6B,
 	};
 
-	colour_gradients[2].min=0.85;
-	colour_gradients[2].max=0.95;
-	colour_gradients[2].min_r = 0xC1;
-	colour_gradients[2].min_g = 0x9A;
-	colour_gradients[2].min_b = 0x6B;
-	colour_gradients[2].max_r = 0xC8;
-	colour_gradients[2].max_g = 0xC8;
-	colour_gradients[2].max_b = 0xC8;
+	map.colour_ramp[2].min=0.85;
+	map.colour_ramp[2].max=0.95;
+	map.colour_ramp[2].min_r = 0xC1;
+	map.colour_ramp[2].min_g = 0x9A;
+	map.colour_ramp[2].min_b = 0x6B;
+	map.colour_ramp[2].max_r = 0xC8;
+	map.colour_ramp[2].max_g = 0xC8;
+	map.colour_ramp[2].max_b = 0xC8;
 
-	colour_gradients[3].min=0.95;
-	colour_gradients[3].max=1.0;
-	colour_gradients[3].min_r = 0xC8;
-	colour_gradients[3].min_g = 0xC8;
-	colour_gradients[3].min_b = 0xC8;
-	colour_gradients[3].max_r = 0xFF;
-	colour_gradients[3].max_g = 0xFF;
-	colour_gradients[3].max_b = 0xFF;
+	map.colour_ramp[3].min=0.95;
+	map.colour_ramp[3].max=1.0;
+	map.colour_ramp[3].min_r = 0xC8;
+	map.colour_ramp[3].min_g = 0xC8;
+	map.colour_ramp[3].min_b = 0xC8;
+	map.colour_ramp[3].max_r = 0xFF;
+	map.colour_ramp[3].max_g = 0xFF;
+	map.colour_ramp[3].max_b = 0xFF;
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,
@@ -383,6 +383,7 @@ int main(int argc, char **argv) {
 	SDL_DestroyTexture(terrain_texture);
 	SDL_DestroyWindow(window);
 	free(map.node_vectors);
+	free(map.colour_ramp);
 
 	SDL_Quit();
 	return EXIT_SUCCESS;
