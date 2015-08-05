@@ -132,9 +132,9 @@ void elevation_to_colour(float elevation, struct gradient *gradients, SDL_Colour
 
 	// Normalise the elevation relative to the elevation_gradient
 	float gradient = (elevation - elevation_gradient->min) / (elevation_gradient->max - elevation_gradient->min);
-	colour->r = elevation_gradient->min_r * decreasing_interpolant(gradient) + elevation_gradient->max_r * increasing_interpolant(gradient);
-	colour->g = elevation_gradient->min_g * decreasing_interpolant(gradient) + elevation_gradient->max_g * increasing_interpolant(gradient);
-	colour->b = elevation_gradient->min_b * decreasing_interpolant(gradient) + elevation_gradient->max_b * increasing_interpolant(gradient);
+	colour->r = elevation_gradient->min_colour.r * decreasing_interpolant(gradient) + elevation_gradient->max_colour.r * increasing_interpolant(gradient);
+	colour->g = elevation_gradient->min_colour.g * decreasing_interpolant(gradient) + elevation_gradient->max_colour.g * increasing_interpolant(gradient);
+	colour->b = elevation_gradient->min_colour.b * decreasing_interpolant(gradient) + elevation_gradient->max_colour.b * increasing_interpolant(gradient);
 };
 
 void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
@@ -225,42 +225,31 @@ int main(int argc, char **argv) {
 	map.colour_ramp[0] = (struct gradient) {
 		.min=0.,
 		.max=0.3,
-		.min_r = 0x00,
-		.min_g = 0x00,
-		.min_b = 0x80,
-		.max_r = 0x22,
-		.max_g = 0x8B,
-		.max_b = 0x22,
+		.min_colour={.r=0x00, .g=0x00, .b=0x80, .a=0x00},
+		.max_colour={.r=0x22, .g=0x8B, .b=0x22, .a=0x00},
 	};
 
 	map.colour_ramp[1] = (struct gradient) {
 		.min=0.3,
 		.max=0.85,
-		.min_r = 0x22,
-		.min_g = 0x8B,
-		.min_b = 0x22,
-		.max_r = 0xC1,
-		.max_g = 0x9A,
-		.max_b = 0x6B,
+		.min_colour={.r=0x22, .g=0x8B, .b=0x22, .a=0x00},
+		.max_colour={.r=0xC1, .g=0x9A, .b=0x6B, .a=0x00},
 	};
 
-	map.colour_ramp[2].min=0.85;
-	map.colour_ramp[2].max=0.95;
-	map.colour_ramp[2].min_r = 0xC1;
-	map.colour_ramp[2].min_g = 0x9A;
-	map.colour_ramp[2].min_b = 0x6B;
-	map.colour_ramp[2].max_r = 0xC8;
-	map.colour_ramp[2].max_g = 0xC8;
-	map.colour_ramp[2].max_b = 0xC8;
+	map.colour_ramp[2] = (struct gradient) {
+		.min=0.85,
+		.max=0.95,
+		.min_colour={.r=0xC1, .g=0x9A, .b=0x6B, .a=0x00},
+		.max_colour={.r=0xC8, .g=0xC8, .b=0xC8, .a=0x00},
+	};
 
-	map.colour_ramp[3].min=0.95;
-	map.colour_ramp[3].max=1.0;
-	map.colour_ramp[3].min_r = 0xC8;
-	map.colour_ramp[3].min_g = 0xC8;
-	map.colour_ramp[3].min_b = 0xC8;
-	map.colour_ramp[3].max_r = 0xFF;
-	map.colour_ramp[3].max_g = 0xFF;
-	map.colour_ramp[3].max_b = 0xFF;
+	map.colour_ramp[3] = (struct gradient) {
+		.min=0.95,
+		.max=1.0,
+		.min_colour={.r=0xC8, .g=0xC8, .b=0xC8, .a=0x00},
+		.max_colour={.r=0xFF, .g=0xFF, .b=0xFF, .a=0x00},
+	};
+
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,

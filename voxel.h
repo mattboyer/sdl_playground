@@ -27,12 +27,8 @@ struct vector {
 struct gradient {
 	float min;
 	float max;
-	Uint8 min_r;
-	Uint8 min_g;
-	Uint8 min_b;
-	Uint8 max_r;
-	Uint8 max_g;
-	Uint8 max_b;
+	SDL_Color min_colour;
+	SDL_Color max_colour;
 };
 
 struct elevation_map {
