@@ -118,23 +118,71 @@ void normalise_map(struct elevation_map *map, const float min, const float max) 
 	};
 };
 
-void elevation_to_colour(float elevation, struct gradient *gradients, SDL_Colour *colour) {
-	/*
-	 * It is assumed that the array of gradients is sorted
-	 */
-	struct gradient *elevation_gradient;
-	unsigned int gradient_idx=0;
-	while ((elevation_gradient = &gradients[gradient_idx])) {
-		if (elevation >= elevation_gradient->min && elevation <= elevation_gradient->max)
+void push_gradient(struct colour_ramp *ramp, float gradient_max, unsigned int hex_colour) {
+	assert(gradient_max > ramp->min);
+	assert(gradient_max < ramp->max);
+
+	struct ramp_gradient *new_gradient = malloc(sizeof(struct ramp_gradient));
+	*new_gradient = (struct ramp_gradient) {
+		.max = gradient_max,
+		.colour = {
+			.r=(hex_colour & 0xFF0000) >> 16,
+			.g=(hex_colour & 0x00FF00) >> 8,
+			.b=(hex_colour & 0x0000FF),
+			.a=0x00,
+		},
+		.next = NULL,
+	};
+
+	struct ramp_gradient *previous, *current;
+	previous = current = ramp->gradients;
+	while (current) {
+		if (current->max > new_gradient->max)
 			break;
-		gradient_idx++;
+		previous = current;
+		current = current->next;
+	};
+	new_gradient->next = current;
+
+	if (previous)
+		previous->next = new_gradient;
+	else
+		ramp->gradients = new_gradient;
+};
+
+void elevation_to_colour(float elevation, struct colour_ramp *ramp, SDL_Colour *colour) {
+	/*
+	 * It is assumed that the list of gradients is sorted!
+	 */
+	SDL_Color *bottom_colour, *top_colour;
+	float min, max;
+	bottom_colour = &ramp->min_colour;
+	min = ramp->min;
+
+	struct ramp_gradient *current = ramp->gradients;
+	while (current) {
+		if (elevation <= current->max)
+			break;
+		min = current->max;
+		bottom_colour = &current->colour;
+		current = current->next;
+	};
+
+	if (current) {
+		max = current->max;
+		top_colour = &current->colour;
+	} else {
+		max = ramp->max;
+		top_colour = &ramp->max_colour;
 	};
 
 	// Normalise the elevation relative to the elevation_gradient
-	float gradient = (elevation - elevation_gradient->min) / (elevation_gradient->max - elevation_gradient->min);
-	colour->r = elevation_gradient->min_colour.r * decreasing_interpolant(gradient) + elevation_gradient->max_colour.r * increasing_interpolant(gradient);
-	colour->g = elevation_gradient->min_colour.g * decreasing_interpolant(gradient) + elevation_gradient->max_colour.g * increasing_interpolant(gradient);
-	colour->b = elevation_gradient->min_colour.b * decreasing_interpolant(gradient) + elevation_gradient->max_colour.b * increasing_interpolant(gradient);
+	float normalised = (elevation - min) / (max - min);
+
+	//FIXME we don't need to call the interpolant 6 times!!!!
+	colour->r = bottom_colour->r * decreasing_interpolant(normalised) + top_colour->r * increasing_interpolant(normalised);
+	colour->g = bottom_colour->g * decreasing_interpolant(normalised) + top_colour->g * increasing_interpolant(normalised);
+	colour->b = bottom_colour->b * decreasing_interpolant(normalised) + top_colour->b * increasing_interpolant(normalised);
 };
 
 void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
@@ -215,34 +263,17 @@ int main(int argc, char **argv) {
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
 	// TODO Refactor the gradients
-	map.colour_ramp = (struct gradient*) calloc(4, sizeof(struct gradient));
-	map.colour_ramp[0] = (struct gradient) {
+	map.colour_ramp = &(struct colour_ramp) {
 		.min=0.,
-		.max=0.3,
+		.max=1.,
 		.min_colour={.r=0x00, .g=0x00, .b=0x80, .a=0x00},
-		.max_colour={.r=0x22, .g=0x8B, .b=0x22, .a=0x00},
-	};
-
-	map.colour_ramp[1] = (struct gradient) {
-		.min=0.3,
-		.max=0.85,
-		.min_colour={.r=0x22, .g=0x8B, .b=0x22, .a=0x00},
-		.max_colour={.r=0xC1, .g=0x9A, .b=0x6B, .a=0x00},
-	};
-
-	map.colour_ramp[2] = (struct gradient) {
-		.min=0.85,
-		.max=0.95,
-		.min_colour={.r=0xC1, .g=0x9A, .b=0x6B, .a=0x00},
-		.max_colour={.r=0xC8, .g=0xC8, .b=0xC8, .a=0x00},
-	};
-
-	map.colour_ramp[3] = (struct gradient) {
-		.min=0.95,
-		.max=1.0,
-		.min_colour={.r=0xC8, .g=0xC8, .b=0xC8, .a=0x00},
 		.max_colour={.r=0xFF, .g=0xFF, .b=0xFF, .a=0x00},
+		.gradients=NULL,
 	};
+
+	push_gradient(map.colour_ramp, 0.3, 0x228B22);
+	push_gradient(map.colour_ramp, 0.85, 0xC19A6B);
+	push_gradient(map.colour_ramp, 0.95, 0xC8C8C8);
 
 	float min, max;
 	create_noise_map(&map, (map.width/2), &min, &max);
@@ -369,7 +400,7 @@ int main(int argc, char **argv) {
 	SDL_DestroyTexture(terrain_texture);
 	SDL_DestroyWindow(window);
 	free(map.node_vectors);
-	free(map.colour_ramp);
+	//free(map.colour_ramp);
 
 	SDL_Quit();
 	return EXIT_SUCCESS;

@@ -24,18 +24,25 @@ struct vector {
 
 // Should a gradient define a min *AND* a max colour/value?
 // Surely, the whole colour ramp has a min (ie. 0.) and a max (ie. 1.) and associated colour (blue and white) and all we should do is inject points and colours in between
-struct gradient {
+struct colour_ramp {
 	float min;
 	float max;
 	SDL_Color min_colour;
 	SDL_Color max_colour;
+	struct ramp_gradient *gradients;
+};
+
+struct ramp_gradient {
+	float max;
+	SDL_Color colour;
+	struct ramp_gradient *next;
 };
 
 struct elevation_map {
 	unsigned int width;
 	unsigned int height;
 	float elevations[TERRAIN_HEIGHT][TERRAIN_WIDTH];
-	struct gradient *colour_ramp;
+	struct colour_ramp *colour_ramp;
 	struct vector *node_vectors;
 };
 
@@ -49,9 +56,11 @@ float decreasing_interpolant(float);
 
 float dot_product(const struct vector*, const struct vector*);
 
-void create_noise_map(struct elevation_map *, const unsigned int, float*, float*);
+void create_noise_map(struct elevation_map*, const unsigned int, float*, float*);
 
-void elevation_to_colour(float, struct gradient*, SDL_Colour*);
+void elevation_to_colour(float, struct colour_ramp*, SDL_Colour*);
+
+void push_gradient(struct colour_ramp*, float, unsigned int);
 
 void render_terrain(SDL_Renderer*, const struct elevation_map*, const struct vector*, const unsigned int);
 
