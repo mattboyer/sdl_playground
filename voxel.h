@@ -16,11 +16,14 @@
 #define HIGHEST_PEAK_TO_HEIGHT	0.8
 
 struct vector {
-	// TODO Use ints
+	// TODO Use ints. Or maybe not. But figure out a way to make this more
+	// efficient if need be. Maybe. Perhaps.
 	float x;
 	float y;
 };
 
+// Should a gradient define a min *AND* a max colour/value?
+// Surely, the whole colour ramp has a min (ie. 0.) and a max (ie. 1.) and associated colour (blue and white) and all we should do is inject points and colours in between
 struct gradient {
 	float min;
 	float max;
@@ -37,6 +40,7 @@ struct elevation_map {
 	unsigned int height;
 	float elevations[TERRAIN_HEIGHT][TERRAIN_WIDTH];
 	struct gradient *colour_ramp;
+	struct vector *node_vectors;
 };
 
 ////////////////

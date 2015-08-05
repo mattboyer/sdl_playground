@@ -33,13 +33,13 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 	const unsigned int nodes_per_side = 1 + (map->width / step);
 
 	// Allocate vectors
-	struct vector *node_vectors = (struct vector*) calloc(nodes_per_side * nodes_per_side, sizeof(struct vector));
+	map->node_vectors = (struct vector*) calloc(nodes_per_side * nodes_per_side, sizeof(struct vector));
 
 	// Would be nice if there were a nicer way that doesn't rely on integer counters
 	unsigned int node_x, node_y;
 	for(node_y = 0; node_y < nodes_per_side; ++node_y)
 		for(node_x = 0; node_x < nodes_per_side; ++node_x)
-			random_unit_vector(&node_vectors[node_y * nodes_per_side + node_x]);
+			random_unit_vector(&map->node_vectors[node_y * nodes_per_side + node_x]);
 
 	float min, max;
 	min=max=0;
@@ -83,10 +83,10 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 				.y = from_above_left.y,
 			};
 
-			float s = dot_product(&node_vectors[vector_idx_below_left], &from_below_left);
-			float t = dot_product(&node_vectors[vector_idx_below_right], &from_below_right);
-			float u = dot_product(&node_vectors[vector_idx_above_left], &from_above_left);
-			float v = dot_product(&node_vectors[vector_idx_above_right], &from_above_right);
+			float s = dot_product(&map->node_vectors[vector_idx_below_left], &from_below_left);
+			float t = dot_product(&map->node_vectors[vector_idx_below_right], &from_below_right);
+			float u = dot_product(&map->node_vectors[vector_idx_above_left], &from_above_left);
+			float v = dot_product(&map->node_vectors[vector_idx_above_right], &from_above_right);
 
 			float bottom_pair_avg = decreasing_interpolant(from_above_left.x) * s + increasing_interpolant(from_above_left.x) * t;
 			float top_pair_avg = decreasing_interpolant(from_above_left.x) * u + increasing_interpolant(from_above_left.x) * v;
@@ -96,11 +96,9 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 				min = sum;
 			if (sum > max)
 				max = sum;
-			// second pass
 			map->elevations[y][x] = sum;
 		}
 	}
-	free(node_vectors);
 	*min_sum = min;
 	*max_sum = max;
 };
@@ -223,14 +221,6 @@ int main(int argc, char **argv) {
 	create_noise_map(&map, 100, &min, &max);
 	normalise_map(&map, min, max);
 
-	height_map_surface = SDL_CreateRGBSurface(
-		0,
-		map.width,
-		map.height,
-		32,
-		0, 0, 0, 0
-	);
-
 	// TODO Refactor the gradients
 	colour_gradients[0] = (struct gradient) {
 		.min=0.,
@@ -271,6 +261,14 @@ int main(int argc, char **argv) {
 	colour_gradients[3].max_r = 0xFF;
 	colour_gradients[3].max_g = 0xFF;
 	colour_gradients[3].max_b = 0xFF;
+
+	height_map_surface = SDL_CreateRGBSurface(
+		0,
+		map.width,
+		map.height,
+		32,
+		0, 0, 0, 0
+	);
 
 	// This needs to be done *AFTER* the map's colour ramp has been defined
 	render_top_down_map(height_map_surface, &map);
@@ -384,6 +382,7 @@ int main(int argc, char **argv) {
 	SDL_DestroyTexture(map_texture);
 	SDL_DestroyTexture(terrain_texture);
 	SDL_DestroyWindow(window);
+	free(map.node_vectors);
 
 	SDL_Quit();
 	return EXIT_SUCCESS;
