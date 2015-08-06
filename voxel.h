@@ -52,18 +52,18 @@ void random_unit_vector(struct vector*);
 
 float increasing_interpolant(float);
 
-float decreasing_interpolant(float);
-
 float dot_product(const struct vector*, const struct vector*);
 
 void create_noise_map(struct elevation_map*, const unsigned int, float*, float*);
 
-void elevation_to_colour(float, struct colour_ramp*, SDL_Colour*);
+void elevation_to_colour(float, struct colour_ramp*, SDL_Color*);
 
-void push_gradient(struct colour_ramp*, float, unsigned int);
+void push_gradient(struct colour_ramp*, float, SDL_Color);
 
 void render_terrain(SDL_Renderer*, const struct elevation_map*, const struct vector*, const unsigned int);
 
 void render_top_down_map(SDL_Surface*, struct elevation_map*);
 
 void normalise_map(struct elevation_map*, const float, const float);
+
+SDL_Color hex_to_colour(unsigned int);

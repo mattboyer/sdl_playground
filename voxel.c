@@ -1,5 +1,14 @@
 #include "voxel.h"
 
+inline SDL_Color hex_to_colour(unsigned int hex) {
+	return (SDL_Color) {
+			.r=(hex & 0xFF0000) >> 16,
+			.g=(hex & 0x00FF00) >> 8,
+			.b=(hex & 0x0000FF),
+			.a=0x00,
+	};
+};
+
 void random_unit_vector(struct vector *dest) {
 	float angle = ((float) rand() * 2 * M_PI) / (RAND_MAX);
 	dest->x = cos(angle);
@@ -11,10 +20,6 @@ inline float increasing_interpolant(float x) {
 	// x=1 -> 1
 	// x=0.5 -> 0.5
 	return 3 * pow(x, 2) - 2 * pow(x, 3);
-};
-
-inline float decreasing_interpolant(float x) {
-	return 1 - increasing_interpolant(x);
 };
 
 float dot_product(const struct vector *lhs, const struct vector *rhs) {
@@ -89,9 +94,9 @@ void create_noise_map(struct elevation_map *map, const unsigned int step, float 
 			float u = dot_product(&map->node_vectors[vector_idx_above_left], &from_above_left);
 			float v = dot_product(&map->node_vectors[vector_idx_above_right], &from_above_right);
 
-			float bottom_pair_avg = decreasing_interpolant(from_above_left.x) * s + increasing_interpolant(from_above_left.x) * t;
-			float top_pair_avg = decreasing_interpolant(from_above_left.x) * u + increasing_interpolant(from_above_left.x) * v;
-			float sum = decreasing_interpolant(from_above_left.y) * top_pair_avg + increasing_interpolant(from_above_left.y) * bottom_pair_avg;
+			float bottom_pair_avg = (1 - increasing_interpolant(from_above_left.x)) * s + increasing_interpolant(from_above_left.x) * t;
+			float top_pair_avg = (1 - increasing_interpolant(from_above_left.x)) * u + increasing_interpolant(from_above_left.x) * v;
+			float sum = (1 - increasing_interpolant(from_above_left.y)) * top_pair_avg + increasing_interpolant(from_above_left.y) * bottom_pair_avg;
 
 			if (sum < min)
 				min = sum;
@@ -118,19 +123,14 @@ void normalise_map(struct elevation_map *map, const float min, const float max) 
 	};
 };
 
-void push_gradient(struct colour_ramp *ramp, float gradient_max, unsigned int hex_colour) {
+void push_gradient(struct colour_ramp *ramp, float gradient_max, SDL_Color hex_colour) {
 	assert(gradient_max > ramp->min);
 	assert(gradient_max < ramp->max);
 
 	struct ramp_gradient *new_gradient = malloc(sizeof(struct ramp_gradient));
 	*new_gradient = (struct ramp_gradient) {
 		.max = gradient_max,
-		.colour = {
-			.r=(hex_colour & 0xFF0000) >> 16,
-			.g=(hex_colour & 0x00FF00) >> 8,
-			.b=(hex_colour & 0x0000FF),
-			.a=0x00,
-		},
+		.colour = hex_colour,
 		.next = NULL,
 	};
 
@@ -150,7 +150,7 @@ void push_gradient(struct colour_ramp *ramp, float gradient_max, unsigned int he
 		ramp->gradients = new_gradient;
 };
 
-void elevation_to_colour(float elevation, struct colour_ramp *ramp, SDL_Colour *colour) {
+void elevation_to_colour(float elevation, struct colour_ramp *ramp, SDL_Color *colour) {
 	/*
 	 * It is assumed that the list of gradients is sorted!
 	 */
@@ -178,11 +178,11 @@ void elevation_to_colour(float elevation, struct colour_ramp *ramp, SDL_Colour *
 
 	// Normalise the elevation relative to the elevation_gradient
 	float normalised = (elevation - min) / (max - min);
+	float interpolation_factor = increasing_interpolant(normalised);
 
-	//FIXME we don't need to call the interpolant 6 times!!!!
-	colour->r = bottom_colour->r * decreasing_interpolant(normalised) + top_colour->r * increasing_interpolant(normalised);
-	colour->g = bottom_colour->g * decreasing_interpolant(normalised) + top_colour->g * increasing_interpolant(normalised);
-	colour->b = bottom_colour->b * decreasing_interpolant(normalised) + top_colour->b * increasing_interpolant(normalised);
+	colour->r = bottom_colour->r * (1 - interpolation_factor) + top_colour->r * interpolation_factor;
+	colour->g = bottom_colour->g * (1 - interpolation_factor) + top_colour->g * interpolation_factor;
+	colour->b = bottom_colour->b * (1 - interpolation_factor) + top_colour->b * interpolation_factor;
 };
 
 void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
@@ -208,7 +208,7 @@ void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, con
 			unsigned int rectangle_x_on_map = map_x + rectangle_idx - rectangles_per_row/2;
 
 			//TODO draw gradients instead of single-colour rectangles
-			SDL_Colour rectangle_colour;
+			SDL_Color rectangle_colour;
 			elevation_to_colour(map->elevations[rectangle_y_on_map][rectangle_x_on_map], map->colour_ramp, &rectangle_colour);
 			SDL_SetRenderDrawColor(renderer, rectangle_colour.r, rectangle_colour.g, rectangle_colour.b, rectangle_colour.a);
 
@@ -226,7 +226,7 @@ void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, con
 
 void render_top_down_map(SDL_Surface *map_surface, struct elevation_map *map) {
 	unsigned int surf_x, surf_y;
-	SDL_Colour pix_colour;
+	SDL_Color pix_colour;
 	for (surf_y = 0; surf_y < map_surface->h; ++surf_y) {
 		for (surf_x = 0; surf_x < map_surface->w; ++surf_x) {
 
@@ -262,18 +262,18 @@ int main(int argc, char **argv) {
 	struct elevation_map map;
 	map.width = TERRAIN_WIDTH;
 	map.height = TERRAIN_HEIGHT;
-	// TODO Refactor the gradients
+
 	map.colour_ramp = &(struct colour_ramp) {
 		.min=0.,
 		.max=1.,
-		.min_colour={.r=0x00, .g=0x00, .b=0x80, .a=0x00},
-		.max_colour={.r=0xFF, .g=0xFF, .b=0xFF, .a=0x00},
+		.min_colour=hex_to_colour(0x000080),
+		.max_colour=hex_to_colour(0xFFFFFF),
 		.gradients=NULL,
 	};
 
-	push_gradient(map.colour_ramp, 0.3, 0x228B22);
-	push_gradient(map.colour_ramp, 0.85, 0xC19A6B);
-	push_gradient(map.colour_ramp, 0.95, 0xC8C8C8);
+	push_gradient(map.colour_ramp, 0.3, hex_to_colour(0x228B22));
+	push_gradient(map.colour_ramp, 0.85, hex_to_colour(0xC19A6B));
+	push_gradient(map.colour_ramp, 0.95, hex_to_colour(0xC8C8C8));
 
 	float min, max;
 	create_noise_map(&map, (map.width/2), &min, &max);
