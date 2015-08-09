@@ -7,8 +7,14 @@
 #include "SDL.h"
 
 #define M_PI			3.14159265358979323846
-#define TERRAIN_WIDTH	200
-#define TERRAIN_HEIGHT	200
+#define TERRAIN_WIDTH	2000
+#define TERRAIN_HEIGHT	2000
+#define TERRAIN_STEP	100
+
+#define TERRAIN_NORMALISED_MIN	-0.5
+#define TERRAIN_NORMALISED_MAX	0.65
+
+#define TOP_DOWN_MAP_SIDE	200
 
 #define WINDOW_WIDTH	600
 #define WINDOW_HEIGHT	600
@@ -41,7 +47,7 @@ struct ramp_gradient {
 struct elevation_map {
 	unsigned int width;
 	unsigned int height;
-	float elevations[TERRAIN_HEIGHT][TERRAIN_WIDTH];
+	unsigned int step;
 	struct colour_ramp *colour_ramp;
 	struct vector *node_vectors;
 };
@@ -54,7 +60,9 @@ float increasing_interpolant(float);
 
 float dot_product(const struct vector*, const struct vector*);
 
-void create_noise_map(struct elevation_map*, const unsigned int, float*, float*);
+void create_noise_map(struct elevation_map*);
+
+float get_map_elevation(const struct elevation_map*, unsigned int, unsigned int);
 
 void elevation_to_colour(float, struct colour_ramp*, SDL_Color*);
 
@@ -62,8 +70,6 @@ void push_gradient(struct colour_ramp*, float, SDL_Color);
 
 void render_terrain(SDL_Renderer*, const struct elevation_map*, const struct vector*, const unsigned int);
 
-void render_top_down_map(SDL_Surface*, struct elevation_map*);
-
-void normalise_map(struct elevation_map*, const float, const float);
+void render_top_down_map(SDL_Surface*, struct elevation_map*, const struct vector*);
 
 SDL_Color hex_to_colour(unsigned int);
