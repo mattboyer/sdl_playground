@@ -9,7 +9,7 @@
 #define M_PI			3.14159265358979323846
 #define TERRAIN_WIDTH	2000
 #define TERRAIN_HEIGHT	2000
-#define TERRAIN_STEP	100
+#define TERRAIN_STEP	80
 
 #define TERRAIN_NORMALISED_MIN	-0.5
 #define TERRAIN_NORMALISED_MAX	0.65
@@ -60,7 +60,7 @@ float increasing_interpolant(float);
 
 float dot_product(const struct vector*, const struct vector*);
 
-void create_noise_map(struct elevation_map*);
+void create_noise_vectors(struct elevation_map*);
 
 float get_map_elevation(const struct elevation_map*, unsigned int, unsigned int);
 

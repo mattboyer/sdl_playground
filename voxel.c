@@ -93,7 +93,7 @@ float get_map_elevation(const struct elevation_map *map, unsigned int map_x, uns
 	return sum;
 };
 
-void create_noise_map(struct elevation_map *map) {
+void create_noise_vectors(struct elevation_map *map) {
 	// We're only really creating the random node vectors here
 	assert(map->width == map->height);
 	assert((map->width) % map->step == 0);
@@ -108,8 +108,6 @@ void create_noise_map(struct elevation_map *map) {
 	for(node_y = 0; node_y < nodes_per_side; ++node_y)
 		for(node_x = 0; node_x < nodes_per_side; ++node_x)
 			random_unit_vector(&map->node_vectors[node_y * nodes_per_side + node_x]);
-
-	//TODO min and max no longer make sense here
 };
 
 void push_gradient(struct colour_ramp *ramp, float gradient_max, SDL_Color hex_colour) {
@@ -233,7 +231,11 @@ void render_top_down_map(SDL_Surface *map_surface, struct elevation_map *map, co
 		for (surf_x = 0; surf_x < map_surface->w; ++surf_x) {
 
 			elevation_to_colour(
-				get_map_elevation(map, map_left_x + surf_x, map_top_y + surf_y),
+				get_map_elevation(
+					map,
+					map_left_x + surf_x,
+					map_top_y + surf_y
+				),
 				map->colour_ramp,
 				&pix_colour
 			);
@@ -278,7 +280,7 @@ int main(int argc, char **argv) {
 	push_gradient(map.colour_ramp, 0.85, hex_to_colour(0xC19A6B));
 	push_gradient(map.colour_ramp, 0.95, hex_to_colour(0xC8C8C8));
 
-	create_noise_map(&map);
+	create_noise_vectors(&map);
 
 	height_map_surface = SDL_CreateRGBSurface(
 		0,
