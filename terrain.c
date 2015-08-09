@@ -1,4 +1,4 @@
-#include "voxel.h"
+#include "terrain.h"
 
 inline SDL_Color hex_to_colour(unsigned int hex) {
 	return (SDL_Color) {
@@ -82,7 +82,8 @@ float get_map_elevation(const struct elevation_map *map, unsigned int map_x, uns
 	float sum = (1 - increasing_interpolant(from_above_left.y)) * top_pair_avg + increasing_interpolant(from_above_left.y) * bottom_pair_avg;
 
 	/*
-	 * This is a bit arbitrary, but we need to normalise the elevation so it ends up 0 <= x <= 1
+	 * This is a bit arbitrary, but we need to normalise the elevation so it
+	 * ends up 0 <= x <= 1
 	 */
 	sum = (sum + fabs(TERRAIN_NORMALISED_MIN)) / (TERRAIN_NORMALISED_MAX - TERRAIN_NORMALISED_MIN);
 	if (sum < 0)
@@ -94,16 +95,19 @@ float get_map_elevation(const struct elevation_map *map, unsigned int map_x, uns
 };
 
 void create_noise_vectors(struct elevation_map *map) {
-	// We're only really creating the random node vectors here
 	assert(map->width == map->height);
 	assert((map->width) % map->step == 0);
 
 	const unsigned int nodes_per_side = 1 + (map->width / map->step);
 
 	// Allocate vectors
-	map->node_vectors = (struct vector*) calloc(nodes_per_side * nodes_per_side, sizeof(struct vector));
+	map->node_vectors = (struct vector*) calloc(
+		nodes_per_side * nodes_per_side,
+		sizeof(struct vector)
+	);
 
-	// Would be nice if there were a nicer way that doesn't rely on integer counters
+	// Would be nice if there were a nicer way that doesn't rely on integer
+	// counters
 	unsigned int node_x, node_y;
 	for(node_y = 0; node_y < nodes_per_side; ++node_y)
 		for(node_x = 0; node_x < nodes_per_side; ++node_x)
@@ -294,7 +298,7 @@ int main(int argc, char **argv) {
 	SDL_Init(SDL_INIT_VIDEO);
 
 	window = SDL_CreateWindow(
-		"Voxel",
+		"Terrain",
 		SDL_WINDOWPOS_UNDEFINED,
 		SDL_WINDOWPOS_UNDEFINED,
 		WINDOW_WIDTH,

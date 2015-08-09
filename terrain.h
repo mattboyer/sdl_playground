@@ -28,8 +28,6 @@ struct vector {
 	float y;
 };
 
-// Should a gradient define a min *AND* a max colour/value?
-// Surely, the whole colour ramp has a min (ie. 0.) and a max (ie. 1.) and associated colour (blue and white) and all we should do is inject points and colours in between
 struct colour_ramp {
 	float min;
 	float max;
