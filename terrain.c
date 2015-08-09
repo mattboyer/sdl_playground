@@ -345,7 +345,6 @@ int main(int argc, char **argv) {
 		SDL_SetRenderTarget(renderer, terrain_texture);
 		render_terrain(renderer, &map, &camera_position, 20);
 		SDL_SetRenderTarget(renderer, NULL);
-		SDL_RenderCopy(renderer, terrain_texture, NULL, NULL);
 
 		// Render the 2D top-down map based on current camera position
 		render_top_down_map(height_map_surface, &map, &camera_position);
@@ -367,6 +366,8 @@ int main(int argc, char **argv) {
 		SDL_RenderFillRect(renderer, &camera_rect);
 		SDL_SetRenderTarget(renderer, NULL);
 
+
+		SDL_RenderCopy(renderer, terrain_texture, NULL, NULL);
 		SDL_Rect map_rect = {
 			.x=0,
 			.y=0,
@@ -374,9 +375,6 @@ int main(int argc, char **argv) {
 			.h=height_map_surface->h,
 		};
 		SDL_RenderCopy(renderer, map_texture, NULL, &map_rect);
-
-		// Causes the renderer to push whatever it's done since last time
-		// to the window it's tied to
 		SDL_RenderPresent(renderer);
 
 		SDL_Event event;
