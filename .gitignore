@@ -5,5 +5,5 @@ install_manifest.txt
 
 Makefile
 plasma
-voxel
+terrain
 perlin
