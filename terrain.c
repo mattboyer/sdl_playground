@@ -191,13 +191,15 @@ void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, con
 	SDL_RenderClear(renderer);
 
 	// TODO Should we just use the target's width?
-	unsigned int rectangles_per_row = target_w;
+	unsigned int rectangles_per_row = 100;
 
 	// These are quantities expressed in 3D world units and must therefore be
 	// consistent and sensible
-	unsigned int distance_to_projection_plane = 2;
-	float camera_z = 1.2;
-	camera_z *=100;
+	unsigned int distance_to_projection_plane = 100;
+
+	// In the "Mars" demo, the camera is always a fixed offset above the terrain
+	//float camera_z = 100 * (.3 + get_map_elevation(map, camera_x, camera_y));
+	float camera_z = 120;
 
 	/*
 	 * In most 3D projection examples, the workflow involves the conversion of
@@ -232,6 +234,7 @@ void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, con
 			//TODO figure out how to sensibly scale elevations
 			rectangle_elevation *= 100;
 
+
 			float vox_x = (((float) rectangle_x_on_map - camera_x) * distance_to_projection_plane) / (-rectangle_y_on_map + camera_y);
 			float vox_y = ((rectangle_elevation-camera_z) * distance_to_projection_plane)/(-rectangle_y_on_map + camera_y);
 
@@ -239,10 +242,10 @@ void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, con
 			 * This data structure can only map to *integer* pixel coordinates 
 			 */
 			SDL_Rect voxel_rect = {
-				.x = (int) lrintf(vox_x) + (target_w/2),
-				.y = (int) lrintf(vox_y) + (target_h/2),
-				.w = 1,
-				.h = (target_h/2) - lrintf(vox_y),
+				.x = (int) (vox_x) + (target_w/2),
+				.y = (int) -(vox_y) + (target_h/2),
+				.w = (int) ((float) target_w/rectangles_per_row) * distance_to_projection_plane / (camera_y-rectangle_y_on_map),
+				.h = (target_h/2) + (int) (vox_y),
 			};
 			/*
 			printf("Xmap: %d, Ymap: %d Elevation: %f\nCamera coords on map: %d/%d\nUnscaled 2D floating point coords: %f/%f\n",
@@ -384,7 +387,7 @@ int main(int argc, char **argv) {
 		SDL_RenderClear(renderer);
 
 		SDL_SetRenderTarget(renderer, terrain_texture);
-		render_terrain(renderer, &map, &camera_position, 20);
+		render_terrain(renderer, &map, &camera_position, 200);
 		SDL_SetRenderTarget(renderer, NULL);
 
 		// Render the 2D top-down map based on current camera position
