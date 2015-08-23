@@ -177,9 +177,9 @@ void elevation_to_colour(float elevation, struct colour_ramp *ramp, SDL_Color *c
 };
 
 void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, const struct vector *position, const unsigned int depth) {
-	unsigned int map_x, map_y;
-	map_x = (unsigned int) position->x;
-	map_y = (unsigned int) position->y;
+	unsigned int camera_x, camera_y;
+	camera_x = (unsigned int) position->x;
+	camera_y = (unsigned int) position->y;
 
 	SDL_Texture *target;
 	int target_w, target_h;
@@ -190,29 +190,70 @@ void render_terrain(SDL_Renderer *renderer, const struct elevation_map *map, con
 	SDL_SetRenderDrawColor(renderer, 0x77, 0xB5, 0xFE, SDL_ALPHA_OPAQUE);
 	SDL_RenderClear(renderer);
 
-	// That's for the furthest line from the camera
-	unsigned int rectangles_per_row = 100;
+	// TODO Should we just use the target's width?
+	unsigned int rectangles_per_row = target_w;
+
+	// These are quantities expressed in 3D world units and must therefore be
+	// consistent and sensible
+	unsigned int distance_to_projection_plane = 2;
+	float camera_z = 1.2;
+	camera_z *=100;
+
+	/*
+	 * In most 3D projection examples, the workflow involves the conversion of
+	 * a 3D vertex to a 2D pixel on the rendering surface. In these scenarios,
+	 * it is implicit that we iterate on a collection of 3D vertices coming
+	 * from some data source.
+	 * Here, however, we need to scan the map in front of the camera, derive
+	 * the elevation from the map's coordinates, *then* project that vertex.
+	 *
+	 * We'll scan a rectangle rectangles_per_row map-units wide and depth map-
+	 * units deep
+	 */
 	int rectangle_y_on_map, rectangle_idx;
-	for (rectangle_y_on_map=map_y-depth; rectangle_y_on_map <= map_y; ++rectangle_y_on_map) {
-		float highest_peak_factor = HIGHEST_PEAK_TO_HEIGHT;
+	for (rectangle_y_on_map=camera_y-depth; rectangle_y_on_map < (camera_y-1); ++rectangle_y_on_map) {
 		for (rectangle_idx=0; rectangle_idx<rectangles_per_row; ++rectangle_idx) {
-			unsigned int rectangle_x_on_map = map_x + rectangle_idx - rectangles_per_row/2;
+			unsigned int rectangle_x_on_map = camera_x + rectangle_idx - rectangles_per_row/2;
 
 			//TODO draw gradients instead of single-colour rectangles
 			SDL_Color rectangle_colour;
-			float rectangle_elevation = get_map_elevation(map, rectangle_x_on_map, rectangle_y_on_map);
-			elevation_to_colour(rectangle_elevation, map->colour_ramp, &rectangle_colour);
-			SDL_SetRenderDrawColor(renderer, rectangle_colour.r, rectangle_colour.g, rectangle_colour.b, rectangle_colour.a);
 
+			float rectangle_elevation = get_map_elevation(map, rectangle_x_on_map, rectangle_y_on_map);
+
+			elevation_to_colour(rectangle_elevation, map->colour_ramp, &rectangle_colour);
+			SDL_SetRenderDrawColor(
+				renderer,
+				rectangle_colour.r,
+				rectangle_colour.g,
+				rectangle_colour.b,
+				rectangle_colour.a
+			);
+
+			//TODO figure out how to sensibly scale elevations
+			rectangle_elevation *= 100;
+
+			float vox_x = (((float) rectangle_x_on_map - camera_x) * distance_to_projection_plane) / (-rectangle_y_on_map + camera_y);
+			float vox_y = ((rectangle_elevation-camera_z) * distance_to_projection_plane)/(-rectangle_y_on_map + camera_y);
+
+			/*
+			 * This data structure can only map to *integer* pixel coordinates 
+			 */
 			SDL_Rect voxel_rect = {
-				.x = rectangle_idx * (target_w/rectangles_per_row),
-				.y = target_h * (1 - highest_peak_factor * rectangle_elevation),
-				.w = (target_w/rectangles_per_row),
-				.h = target_h * highest_peak_factor * rectangle_elevation,
+				.x = (int) lrintf(vox_x) + (target_w/2),
+				.y = (int) lrintf(vox_y) + (target_h/2),
+				.w = 1,
+				.h = (target_h/2) - lrintf(vox_y),
 			};
+			/*
+			printf("Xmap: %d, Ymap: %d Elevation: %f\nCamera coords on map: %d/%d\nUnscaled 2D floating point coords: %f/%f\n",
+					rectangle_x_on_map, rectangle_y_on_map, rectangle_elevation,
+					camera_x, camera_y,
+					vox_x, vox_y
+			);
+			*/
+
 			SDL_RenderFillRect(renderer, &voxel_rect);
 		};
-		rectangles_per_row-=2;
 	};
 };
 
